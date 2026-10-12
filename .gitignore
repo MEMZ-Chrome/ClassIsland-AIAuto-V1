@@ -1,0 +1,9 @@
+﻿bin/
+obj/
+*.user
+*.suo
+.vs/
+dist/
+ci/
+ci1/
+memory.md

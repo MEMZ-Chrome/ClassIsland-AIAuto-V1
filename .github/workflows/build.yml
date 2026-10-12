@@ -1,0 +1,70 @@
+name: CI Build & Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - "*.*.*.*"
+      - "v*"
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ClassIsland 1.x Plugin
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 8.0 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore ClassIsland.Automation.V1\ClassIsland.Automation.V1.csproj
+
+    - name: Build
+      run: dotnet build ClassIsland.Automation.V1\ClassIsland.Automation.V1.csproj -c Release --no-restore
+
+    - name: Package Output
+      run: |
+        mkdir dist
+        Copy-Item -Path "ClassIsland.Automation.V1\bin\Release\net8.0-windows\*" -Destination "dist\" -Recurse -Force
+        Compress-Archive -Path "dist\*" -DestinationPath "ClassIsland.Automation.V1.zip"
+        Compress-Archive -Path "dist\*" -DestinationPath "ClassIsland.Automation.V1.cipx"
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ClassIsland-Automation-V1
+        path: |
+          ClassIsland.Automation.V1.zip
+          ClassIsland.Automation.V1.cipx
+
+    - name: Publish GitHub Release (Tag Triggered)
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        $tagName = $env:GITHUB_REF_NAME
+        $v1Md5 = (Get-FileHash ClassIsland.Automation.V1.cipx -Algorithm MD5).Hash
+
+        $releaseNotes = @"
+        ClassIsland AI 自动化插件 (1.x) $tagName
+
+        ### 插件包文件
+        - **ClassIsland 1.x (WPF)**: ``ClassIsland.Automation.V1.cipx``
+
+        ### 校验信息 (ClassIsland 插件索引规范)
+        <!-- CLASSISLAND_PKG_MD5 {"ClassIsland.Automation.V1.cipx":"$v1Md5"} -->
+        "@
+
+        Set-Content -Path release_notes.md -Value $releaseNotes -Encoding UTF8
+        gh release create $tagName ClassIsland.Automation.V1.cipx ClassIsland.Automation.V1.zip --title "$tagName" --notes-file release_notes.md

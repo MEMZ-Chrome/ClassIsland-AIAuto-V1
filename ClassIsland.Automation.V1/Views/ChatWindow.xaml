@@ -1,0 +1,174 @@
+<Window x:Class="ClassIsland.Automation.V1.Views.ChatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:ClassIsland.Automation.Core.Models;assembly=ClassIsland.Automation.Core"
+        xmlns:mdXaml="clr-namespace:MdXaml;assembly=MdXaml"
+        Title="IslandAgent" Width="640" Height="720"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 头部说明、模型选择与状态 -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="AI 助手" FontSize="18" FontWeight="Bold"/>
+                <TextBlock Text="连续智能调课、课表问答与设置调整" FontSize="12" Foreground="Gray" Margin="0,2,0,0"/>
+            </StackPanel>
+
+            <!-- 对话界面模型快速切换下拉框 -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="当前模型:" VerticalAlignment="Center" FontSize="12" Foreground="Gray" Margin="0,0,6,0"/>
+                <ComboBox Name="ModelSelectComboBox" MinWidth="180" MaxWidth="260" VerticalAlignment="Center" Height="28"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 消息历史对话流（气泡式对话界面） -->
+        <Border Grid.Row="1" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="8" Background="#FAFAFA" Padding="8">
+            <ScrollViewer Name="ChatScrollViewer" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl Name="MessagesItemsControl">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:ChatMessageItem}">
+                            <Grid Margin="0,6">
+                                <!-- 用户消息气泡（右对齐） -->
+                                <StackPanel HorizontalAlignment="Right" MaxWidth="460" Margin="30,0,0,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="{Binding TimeString}" FontSize="11" Foreground="Gray" HorizontalAlignment="Right" Margin="0,0,4,2"/>
+                                    <Border Background="#0078D4" CornerRadius="14,14,2,14" Padding="12,8">
+                                        <TextBox Text="{Binding Content, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                                 BorderThickness="0" Background="Transparent" Foreground="White" FontSize="14"
+                                                 Cursor="Arrow"/>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- AI 助手消息气泡（左对齐，支持 Markdown 表格与富文本排版） -->
+                                <StackPanel HorizontalAlignment="Left" MaxWidth="500" Margin="0,0,30,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAssistant}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <StackPanel Orientation="Horizontal" Margin="4,0,0,2">
+                                        <TextBlock Text="AI 助手" FontWeight="SemiBold" FontSize="12" Foreground="#333" Margin="0,0,6,0"/>
+                                        <TextBlock Text="{Binding TimeString}" FontSize="11" Foreground="Gray"/>
+                                    </StackPanel>
+                                    <Border Background="#F3F3F3" BorderBrush="#E0E0E0" BorderThickness="1"
+                                            CornerRadius="14,14,14,2" Padding="12,10">
+                                        <StackPanel>
+                                            <!-- 工具调用徽标 -->
+                                            <ItemsControl ItemsSource="{Binding ToolBadges}">
+                                                <ItemsControl.Style>
+                                                    <Style TargetType="ItemsControl">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasToolBadges}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ItemsControl.Style>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#FFFFFF" BorderBrush="#DDDDDD" BorderThickness="1"
+                                                                CornerRadius="4" Padding="6,2" Margin="0,2">
+                                                            <TextBlock Text="{Binding}" FontSize="11" Foreground="#666666"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- 消息文本（Markdown 富文本，包含表格、列表、加粗） -->
+                                            <mdXaml:MarkdownScrollViewer
+                                                Markdown="{Binding Content}"
+                                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                IsToolBarVisible="False"
+                                                Background="Transparent"
+                                                Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- 系统消息（居中） -->
+                                <StackPanel HorizontalAlignment="Center" Margin="0,4">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSystem}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <Border Background="#EEEEEE" CornerRadius="6" Padding="8,4">
+                                        <TextBlock Text="{Binding Content}" FontSize="11" Foreground="Gray" TextWrapping="Wrap"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- 图片状态栏 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,6">
+            <Button Name="SelectImageButton" Content="添加课表图片" Padding="8,4"/>
+            <TextBlock Name="ImageStatusTextBlock" VerticalAlignment="Center" Foreground="Gray" Text="未选择图片" Margin="8,0,8,0"/>
+            <Button Name="ClearImageButton" Content="清除" Visibility="Collapsed" Padding="8,4"/>
+        </StackPanel>
+
+        <!-- 输入与发送（支持回车发送，Shift+Enter换行） -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid>
+                <TextBox Name="InputTextBox" AcceptsReturn="True" TextWrapping="Wrap"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                         MinHeight="36" MaxHeight="120"
+                         VerticalContentAlignment="Center" Padding="6"/>
+                <TextBlock Name="InputWatermarkTextBlock" Text="请输入文本..." Foreground="Gray"
+                           IsHitTestVisible="False" VerticalAlignment="Center" Margin="10,0,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=InputTextBox}" Value="">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+            <Button Name="SendButton" Grid.Column="1" Content="发送" Margin="8,0,0,0" Padding="16,6"
+                    VerticalAlignment="Bottom"/>
+        </Grid>
+    </Grid>
+</Window>

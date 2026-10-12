@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Configurations>Debug;Release</Configurations>
+    <RootNamespace>ClassIsland.Automation.V1</RootNamespace>
+    <AssemblyName>ClassIsland.Automation.V1</AssemblyName>
+    <!--
+      本仓库是 ClassIsland 1.x 专用的独立插件，不再与 2.x 版本共用工程。
+      Core 源码以文件形式收在本项目内（Core/ 目录），整个项目只面向 1.x 一个宿主。
+      定义 CLASSISLAND_1X 让 Core 里的兼容分支固定走 1.x：
+      档案字典键为 string，时间项用 StartSecond/EndSecond。
+    -->
+    <DefineConstants>$(DefineConstants);CLASSISLAND_1X</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ClassIsland 1.x SDK。ExcludeAssets 避免把宿主自身的程序集复制进插件包 -->
+    <PackageReference Include="ClassIsland.PluginSdk" Version="1.7.0">
+      <ExcludeAssets>runtime; native</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="System.Text.Json" Version="8.0.5">
+      <ExcludeAssets>runtime; native</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="manifest.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
