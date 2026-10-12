@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Windows.Controls;
 using ClassIsland.Automation.Core.Services;
 using ClassIsland.Automation.V1.Views;
@@ -67,8 +68,31 @@ public class Plugin : PluginBase
                 }
             };
 
-            // 1.x WPF 托盘菜单扩展支持
-            taskBarIconService.MainTaskBarIcon.ContextMenu?.Items.Add(menuItem);
+            // ClassIsland 的托盘菜单在主程序里已经构建好，插件只能在末尾追加，
+            // 直接 Add 会掉到「退出」「调试」下面。所以先追加，再整体挪到
+            // 「换课…」之后、「重启」之前。
+            var menu = taskBarIconService.MainTaskBarIcon.ContextMenu;
+            if (menu == null) return;
+
+            var separator = new Separator();
+            menu.Items.Add(separator);
+            menu.Items.Add(menuItem);
+
+            // 目标：插在「重启」这一项的前面（它前面本来就是一个 Separator）。
+            var restart = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Header?.ToString() == "重启");
+            if (restart != null)
+            {
+                menu.Items.Remove(separator);
+                menu.Items.Remove(menuItem);
+
+                // 移除后索引会前移，重新定位「重启」
+                var target = menu.Items.IndexOf(restart);
+                if (target >= 0)
+                {
+                    menu.Items.Insert(target, separator);
+                    menu.Items.Insert(target + 1, menuItem);
+                }
+            }
         }
         catch (Exception ex)
         {
