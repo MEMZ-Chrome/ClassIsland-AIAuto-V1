@@ -15,6 +15,7 @@ namespace ClassIsland.Automation.V1.Views;
 public partial class ChatWindow : Window
 {
     private byte[]? _selectedImageBytes;
+    private bool _isSending = false;
     private string _imageMimeType = "image/png";
     private readonly AiClientService _aiClient = new();
     private readonly IProfileService? _profileService;
@@ -235,6 +236,25 @@ public partial class ChatWindow : Window
             return;
         }
 
+        // 防重入：Enter 处理器不受 SendButton.IsEnabled 约束，连按回车会并发发起多次请求，
+        // 同时读写 _conversationMessages / _displayMessages 与共享配置。
+        if (_isSending)
+        {
+            return;
+        }
+        _isSending = true;
+        try
+        {
+            await SendCurrentMessageCoreAsync(prompt);
+        }
+        finally
+        {
+            _isSending = false;
+        }
+    }
+
+    private async Task SendCurrentMessageCoreAsync(string prompt)
+    {
         // 使用 SettingsManager 的共享实例，而不是每次都从磁盘重新反序列化。
         // 重新 Load 会替换静态实例，导致设置页正在编辑的对象与对话窗口持有的对象
         // 变成两份，设置页的修改会在下次发送时被静默丢弃。
@@ -334,7 +354,12 @@ public partial class ChatWindow : Window
                 {
                     _conversationMessages[0]["content"] = BuildSystemPrompt(settings);
                 }
-            });
+            })
+            {
+                // 聊天窗口不提供解锁入口，因此只有「未设置任何访问保护」时才视为已授权。
+                // 设置了密码/TOTP 的用户必须去设置页改高危项，AI 不能替他开。
+                IsAuthorizedSession = !SecurityService.IsActiveProtectionEnabled(settings)
+            };
             var response = await _aiClient.ExecuteAgentTurnAsync(
                 settings,
                 _conversationMessages,

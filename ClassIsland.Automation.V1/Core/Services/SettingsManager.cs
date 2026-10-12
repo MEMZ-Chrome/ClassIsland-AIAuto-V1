@@ -62,9 +62,9 @@ public static class SettingsManager
     private static void LoadCore(string filePath)
     {
         _settingsFilePath = filePath;
-        try
+        if (File.Exists(filePath))
         {
-            if (File.Exists(filePath))
+            try
             {
                 string json = File.ReadAllText(filePath);
                 _settings = JsonSerializer.Deserialize<PluginSettings>(json) ?? new PluginSettings();
@@ -72,15 +72,44 @@ public static class SettingsManager
                 _loaded = true;
                 return;
             }
+            catch (Exception ex)
+            {
+                // 解析失败绝不静默覆盖：先把原文件另存为 .corrupt，
+                // 否则后续任何一次保存都会用默认配置永久覆盖掉用户的供应商/密钥/记忆。
+                try
+                {
+                    File.Copy(filePath, filePath + ".corrupt", overwrite: true);
+                }
+                catch { }
+
+                LastLoadError = $"配置文件解析失败，已备份为 {Path.GetFileName(filePath)}.corrupt：{ex.Message}";
+                _settings = new PluginSettings();
+                _settings.EnsureProvidersInitialized();
+                _loaded = true;
+                return;
+            }
         }
-        catch { }
 
         _settings = new PluginSettings();
         _settings.EnsureProvidersInitialized();
         _loaded = true;
     }
 
-    public static void Save(PluginSettings? settings = null)
+    /// <summary>
+    /// 最近一次加载失败的原因；为 null 表示加载正常。
+    /// </summary>
+    public static string? LastLoadError { get; private set; }
+
+    /// <summary>
+    /// 最近一次保存失败的原因；为 null 表示上次保存成功。
+    /// </summary>
+    public static string? LastSaveError { get; private set; }
+
+    /// <summary>
+    /// 保存配置。<returns>true 表示确实写入了磁盘。</returns>
+    /// 调用方必须检查返回值，不能无条件提示「保存成功」。
+    /// </summary>
+    public static bool Save(PluginSettings? settings = null)
     {
         lock (_lock)
         {
@@ -91,6 +120,7 @@ public static class SettingsManager
                 _loaded = true;
             }
 
+            var ok = false;
             if (!string.IsNullOrEmpty(_settingsFilePath))
             {
                 try
@@ -106,11 +136,21 @@ public static class SettingsManager
                         WriteIndented = true
                     });
                     File.WriteAllText(_settingsFilePath, json);
+                    ok = true;
+                    LastSaveError = null;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    LastSaveError = ex.Message;
+                }
+            }
+            else
+            {
+                LastSaveError = "未指定配置文件路径";
             }
 
             NotifySettingsChanged(_settings);
+            return ok;
         }
     }
 

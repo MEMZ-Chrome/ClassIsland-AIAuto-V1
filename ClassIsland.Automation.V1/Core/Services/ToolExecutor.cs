@@ -12,33 +12,41 @@ public class ToolExecutor
 {
     /// <summary>
     /// 可供 AI 读取与修改的 ClassIsland 宿主设置项白名单。
+    ///
+    /// 名单里的每一项都已对照 classisland-1x 的 ClassIsland.Models.Settings 核验存在；
+    /// 不存在的名字会被反射静默跳过，导致模型宣称改了其实没改，因此不要凭印象添加。
     /// 仅包含标量类型，避免误改集合类设置导致应用异常。
     /// </summary>
     private static readonly string[] AppSettingPropertyNames =
     [
         // 时间与计时
-        "TimeOffsetSeconds", "IsTimeAutoAdjustEnabled", "TimeAutoAdjustInterval",
+        "TimeOffsetSeconds", "IsTimeAutoAdjustEnabled", "TimeAutoAdjustSeconds", "IsExactTimeEnabled",
         // 通知
         "IsNotificationEnabled", "IsClassPrepareNotificationEnabled",
         "IsClassOffNotificationEnabled", "IsClassChangingNotificationEnabled",
-        "IsWeatherNotificationEnabled", "IsAfterClassNotificationEnabled",
+        "ClassPrepareNotifySeconds", "IsNotificationTopmostEnabled", "AllowNotificationTopmost",
         // 外观
-        "Theme", "Opacity", "Scale", "ShowDate", "ShowWeekDay",
-        "ShowSecond", "IsClockSecondsVisible", "IsMainWindowVisible",
+        "Theme", "Opacity", "Scale", "ShowDate", "IsMainWindowVisible",
+        "IsMouseClickingEnabled", "IsMouseInFadingEnabled",
         // 窗口行为
         "HideOnClass", "HideOnFullscreen", "HideOnMaxWindow",
-        "IsMainWindowTopmost", "IsMousePenetrationEnabled",
-        // 启动与关闭
-        "IsAutoStartupEnabled", "IsSentryEnabled", "IsDebugEnabled",
-        "IsStartupUpdateCheckEnabled",
+        // 诊断
+        "IsSentryEnabled", "IsDebugEnabled",
         // 档案
-        "SelectedProfile", "IsSleepModeEnabled",
+        "SelectedProfile",
     ];
 
     private readonly IPublicProfileService? _profileService;
     private readonly IPublicUriNavigationService? _uriService;
     private readonly PluginSettings? _pluginSettings;
     private readonly Action? _onSavePluginSettings;
+
+    /// <summary>
+    /// 本次会话是否已通过密码 / TOTP 验证。
+    /// 用于阻止 AI 自行开启高危能力（命令行执行）。
+    /// 未设置任何访问保护时视为已授权，因为此时本来就没有需要绕过的门槛。
+    /// </summary>
+    public bool IsAuthorizedSession { get; set; }
 
     public ToolExecutor(
         IPublicProfileService? profileService,
@@ -317,6 +325,64 @@ public class ToolExecutor
             return new ToolExecutionResult { ToolCallId = toolId, Name = "create_time_layout", Success = false, Result = "缺少 items 节点列表" };
         }
 
+        // 先完整解析并校验，全部通过后再动现有的时间表。
+        // 否则一旦中途失败，正在被课表引用的旧时间表会被清空且无法回滚。
+        var parsedItems = new List<TimeLayoutItem>();
+        foreach (var itemNode in itemsArray)
+        {
+            if (itemNode is not JsonObject itObj)
+            {
+                return new ToolExecutionResult { ToolCallId = toolId, Name = "create_time_layout", Success = false, Result = "items 中存在非对象元素" };
+            }
+
+            var startStr = itObj["startTime"]?.GetValue<string>() ?? "";
+            var endStr = itObj["endTime"]?.GetValue<string>() ?? "";
+            var timeType = itObj["timeType"]?.GetValue<int>() ?? 0;
+            var breakName = itObj["breakName"]?.GetValue<string>() ?? "";
+
+            if (!TimeSpan.TryParse(startStr, out var startTime) || !TimeSpan.TryParse(endStr, out var endTime))
+            {
+                return new ToolExecutionResult
+                {
+                    ToolCallId = toolId,
+                    Name = "create_time_layout",
+                    Success = false,
+                    Result = $"时间格式无法解析：startTime=\"{startStr}\", endTime=\"{endStr}\"。请使用 HH:mm 或 HH:mm:ss。"
+                };
+            }
+
+            if (endTime < startTime)
+            {
+                return new ToolExecutionResult
+                {
+                    ToolCallId = toolId,
+                    Name = "create_time_layout",
+                    Success = false,
+                    Result = $"结束时间早于开始时间：{startTime:hh\\:mm} - {endTime:hh\\:mm}"
+                };
+            }
+
+            var timeItem = new TimeLayoutItem
+            {
+                TimeType = timeType,
+                BreakName = breakName
+            };
+            ProfileCompat.SetTimeRange(timeItem, startTime, endTime);
+            parsedItems.Add(timeItem);
+        }
+
+        if (parsedItems.Count == 0)
+        {
+            return new ToolExecutionResult
+            {
+                ToolCallId = toolId,
+                Name = "create_time_layout",
+                Success = false,
+                Result = "items 为空，未做任何修改（避免清空现有时间表）。"
+            };
+        }
+
+        // 校验全部通过，此时才写入
         var existingLayout = profile.TimeLayouts.FirstOrDefault(kv => string.Equals(kv.Value.Name, layoutName, StringComparison.OrdinalIgnoreCase));
         TimeLayout layout;
         if (existingLayout.Value != null)
@@ -330,24 +396,9 @@ public class ToolExecutor
             ProfileCompat.SetByKey(profile.TimeLayouts, Guid.NewGuid().ToString(), layout);
         }
 
-        foreach (var itemNode in itemsArray)
+        foreach (var item in parsedItems)
         {
-            if (itemNode is not JsonObject itObj) continue;
-            var startStr = itObj["startTime"]?.GetValue<string>() ?? "00:00:00";
-            var endStr = itObj["endTime"]?.GetValue<string>() ?? "00:00:00";
-            var timeType = itObj["timeType"]?.GetValue<int>() ?? 0;
-            var breakName = itObj["breakName"]?.GetValue<string>() ?? "";
-
-            TimeSpan.TryParse(startStr, out var startTime);
-            TimeSpan.TryParse(endStr, out var endTime);
-
-            var timeItem = new TimeLayoutItem
-            {
-                TimeType = timeType,
-                BreakName = breakName
-            };
-            ProfileCompat.SetTimeRange(timeItem, startTime, endTime);
-            layout.Layouts.Add(timeItem);
+            layout.Layouts.Add(item);
         }
 
         _profileService.SaveProfile();
@@ -616,12 +667,22 @@ public class ToolExecutor
         }
 
         profile.IsOverlayClassPlanEnabled = true;
-        ProfileCompat.SetOverlayClassPlanId(profile, tempId);
-        ProfileCompat.SetTempClassPlanId(profile, tempId);
-        profile.TempClassPlanSetupTime = targetDate.Date;
+
+        // OrderedSchedules 是按日期索引的，写入目标日期即可精确生效。
         var orderedSchedule = new OrderedSchedule();
         ProfileCompat.SetClassPlanId(orderedSchedule, tempId);
         profile.OrderedSchedules[targetDate.Date] = orderedSchedule;
+
+        // 只有当目标日期就是今天时，才写入这组「全局当前临时课表」旧字段。
+        // 宿主判定当前临时课表的条件是 TempClassPlanSetupTime.Date >= 查询日期，
+        // 若把未来的临时课表写进去（例如明天），查询今天时条件同样成立，
+        // 会导致明天的调课立刻覆盖今天的课表。
+        if (targetDate.Date == DateTime.Today)
+        {
+            ProfileCompat.SetOverlayClassPlanId(profile, tempId);
+            ProfileCompat.SetTempClassPlanId(profile, tempId);
+            profile.TempClassPlanSetupTime = targetDate.Date;
+        }
 
         _profileService.SaveProfile();
 
@@ -743,6 +804,24 @@ public class ToolExecutor
                     converted = Enum.ToObject(p.PropertyType, int.Parse(raw));
                 else
                     converted = Convert.ChangeType(raw, p.PropertyType);
+
+                // 范围校验：Schema 里写了 0.1–1.0 / 0.5–2.0，但描述不是约束。
+                // 不夹住的话，一次越界写入会立即生效并保存，可能让界面完全不可见。
+                if (converted is double dv && !double.IsFinite(dv))
+                {
+                    return false;
+                }
+                switch (propName)
+                {
+                    case "Opacity" when converted is double od:
+                        converted = Math.Clamp(od, 0.1, 1.0);
+                        break;
+                    case "Scale" when converted is double sd:
+                        converted = Math.Clamp(sd, 0.5, 2.0);
+                        break;
+                    case "Theme" when converted is int ti && (ti < 0 || ti > 2):
+                        return false;
+                }
 
                 p.SetValue(settingsObj, converted);
                 updatedList.Add($"{propName} = {converted}");
@@ -1135,8 +1214,29 @@ public class ToolExecutor
         if (args["isCommandExecutionEnabled"] is JsonNode cmdNode)
         {
             var enabled = cmdNode.GetValue<bool>();
-            _pluginSettings.IsCommandExecutionEnabled = enabled;
-            changes.Add($"命令行执行权限已{(enabled ? "开启" : "关闭")}");
+
+            if (!enabled)
+            {
+                _pluginSettings.IsCommandExecutionEnabled = false;
+                changes.Add("命令行执行权限已关闭");
+            }
+            else if (!IsAuthorizedSession)
+            {
+                // 开启命令行执行等同于把宿主用户权限交给模型，绝不能由模型自己决定。
+                // 只有通过密码/TOTP 验证的会话才允许开启，否则要求用户去设置页手动打开。
+                return new ToolExecutionResult
+                {
+                    ToolCallId = toolId,
+                    Name = "update_plugin_settings",
+                    Success = false,
+                    Result = "出于安全考虑，命令行执行权限不能由 AI 自行开启。请在【设置 -> IslandAgent设置 -> 高级偏好】中由本人手动开启。"
+                };
+            }
+            else
+            {
+                _pluginSettings.IsCommandExecutionEnabled = true;
+                changes.Add("命令行执行权限已开启");
+            }
         }
         if (args["customPrompt"] is JsonNode promptNode)
         {
@@ -1394,7 +1494,9 @@ public class ToolExecutor
 
             if (!process.WaitForExit(timeoutSec * 1000))
             {
-                try { process.Kill(); } catch { }
+                // 必须连子进程一起杀：只 Kill 外层 cmd.exe 时，
+                // 它启动的脚本/下载器会继续在后台跑。
+                try { process.Kill(entireProcessTree: true); } catch { }
                 return new ToolExecutionResult
                 {
                     ToolCallId = toolId,
@@ -1520,14 +1622,29 @@ public class ToolExecutor
     public static int ParseWeekDay(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return -1;
+
+        // 必须带「周 / 星期 / 礼拜」前缀才算星期表述，否则
+        // 「高三课表」「初二课表」这类名字会因为含「三」「二」被误判成周三、周二。
         var s = name.Replace("礼拜", "周").Replace("星期", "周");
-        if (s.Contains("周一") || s.Contains("星期一") || s.Contains("一")) return (int)DayOfWeek.Monday;
-        if (s.Contains("周二") || s.Contains("星期二") || s.Contains("二")) return (int)DayOfWeek.Tuesday;
-        if (s.Contains("周三") || s.Contains("星期三") || s.Contains("三")) return (int)DayOfWeek.Wednesday;
-        if (s.Contains("周四") || s.Contains("星期四") || s.Contains("四")) return (int)DayOfWeek.Thursday;
-        if (s.Contains("周五") || s.Contains("星期五") || s.Contains("五")) return (int)DayOfWeek.Friday;
-        if (s.Contains("周六") || s.Contains("星期六") || s.Contains("六")) return (int)DayOfWeek.Saturday;
-        if (s.Contains("周日") || s.Contains("周天") || s.Contains("星期日") || s.Contains("星期天") || s.Contains("日") || s.Contains("天")) return (int)DayOfWeek.Sunday;
+
+        // 先匹配「周X」，避免「周一日」这类名字被后面的单字规则抢先命中
+        int idx = s.IndexOf('周');
+        while (idx >= 0 && idx + 1 < s.Length)
+        {
+            switch (s[idx + 1])
+            {
+                case '一': return (int)DayOfWeek.Monday;
+                case '二': return (int)DayOfWeek.Tuesday;
+                case '三': return (int)DayOfWeek.Wednesday;
+                case '四': return (int)DayOfWeek.Thursday;
+                case '五': return (int)DayOfWeek.Friday;
+                case '六': return (int)DayOfWeek.Saturday;
+                case '日':
+                case '天': return (int)DayOfWeek.Sunday;
+            }
+            idx = s.IndexOf('周', idx + 1);
+        }
+
         return -1;
     }
 

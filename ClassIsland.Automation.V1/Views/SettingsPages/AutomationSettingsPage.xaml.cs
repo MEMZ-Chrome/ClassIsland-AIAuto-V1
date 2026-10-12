@@ -50,7 +50,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
         Unloaded += (_, _) =>
         {
             SettingsManager.SettingsChanged -= OnExternalSettingsChanged;
-            AutoSave();
+            // 卸载时不再回写：所有改动在变更当场就已 AutoSave，
+            // 这里再写一次只会用可能已过时的控件值覆盖外部（AI 工具）的修改。
         };
     }
 
@@ -84,11 +85,22 @@ public partial class AutomationSettingsPage : SettingsPageBase
             _isUpdatingUi = true;
             try
             {
+                // 同步所有可能在设置页之外被修改的字段。
+                // 只同步 CustomMemory 的话，其他控件会保留旧值并可能被回写覆盖。
                 _settings.CustomMemory = updated.CustomMemory;
-                if (CustomMemoryTextBox != null)
-                {
-                    CustomMemoryTextBox.Text = updated.CustomMemory;
-                }
+                if (CustomMemoryTextBox != null) CustomMemoryTextBox.Text = updated.CustomMemory;
+
+                _settings.CustomPrompt = updated.CustomPrompt;
+                if (CustomPromptTextBox != null) CustomPromptTextBox.Text = updated.CustomPrompt;
+
+                _settings.IsMemoryEnabled = updated.IsMemoryEnabled;
+                if (IsMemoryEnabledCheckBox != null) IsMemoryEnabledCheckBox.IsChecked = updated.IsMemoryEnabled;
+
+                _settings.IsCommandExecutionEnabled = updated.IsCommandExecutionEnabled;
+                if (IsCommandExecutionEnabledCheckBox != null) IsCommandExecutionEnabledCheckBox.IsChecked = updated.IsCommandExecutionEnabled;
+
+                _settings.MaxToolIterations = updated.MaxToolIterations;
+                if (MaxToolIterationsTextBox != null) MaxToolIterationsTextBox.Text = updated.EffectiveMaxToolIterations.ToString();
             }
             finally
             {
@@ -158,8 +170,14 @@ public partial class AutomationSettingsPage : SettingsPageBase
     {
         try
         {
-            SettingsManager.Save(_settings);
-            if (StatusTextBlock != null) StatusTextBlock.Text = "设置已自动保存！";
+            // Save 现在返回是否真的落盘；以前异常被吞掉，界面却照样提示「已保存」。
+            bool ok = SettingsManager.Save(_settings);
+            if (StatusTextBlock != null)
+            {
+                StatusTextBlock.Text = ok
+                    ? "设置已自动保存！"
+                    : $"保存失败：{SettingsManager.LastSaveError ?? "未知原因"}";
+            }
         }
         catch (Exception ex)
         {
@@ -225,8 +243,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
             SaveButton.Click += (_, _) =>
             {
                 SyncFromInputs();
-                SaveSettingsToFile();
-                ShowToast("所有设置已保存成功！");
+                bool ok = SettingsManager.Save(_settings);
+                ShowToast(
+                    ok ? "所有设置已保存成功！" : $"保存失败：{SettingsManager.LastSaveError ?? "未知原因"}",
+                    isError: !ok);
             };
         }
 
@@ -822,19 +842,24 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
         if (TotpStatusTextBlock != null)
         {
-            if (SecurityService.HasActiveTotp(_settings))
+            // 暂存优先于已激活：重新配置 TOTP 时两者会同时存在，
+            // 若先判 HasActiveTotp 会把刚显示的验证卡立刻隐藏，导致无法完成替换。
+            if (SecurityService.HasPendingTotp(_settings))
+            {
+                bool alsoActive = SecurityService.HasActiveTotp(_settings);
+                TotpStatusTextBlock.Text = alsoActive
+                    ? "当前状态：正在重新配置 TOTP（旧口令仍然有效，验证通过后才会替换）"
+                    : "当前状态：发现暂存的待验证 TOTP（在输入正确动态码前绝不生效）";
+                if (SetupTotpButton != null) SetupTotpButton.Content = "重新生成 TOTP";
+                if (DisableTotpButton != null) DisableTotpButton.Visibility = alsoActive ? Visibility.Visible : Visibility.Collapsed;
+                DisplayTotpSetupCard(_settings.PendingTotpSecret);
+            }
+            else if (SecurityService.HasActiveTotp(_settings))
             {
                 TotpStatusTextBlock.Text = "当前状态：TOTP 动态口令已正式激活生效保护";
                 if (SetupTotpButton != null) SetupTotpButton.Content = "重新配置 TOTP";
                 if (DisableTotpButton != null) DisableTotpButton.Visibility = Visibility.Visible;
                 if (TotpSetupCard != null) TotpSetupCard.Visibility = Visibility.Collapsed;
-            }
-            else if (SecurityService.HasPendingTotp(_settings))
-            {
-                TotpStatusTextBlock.Text = "当前状态：发现暂存的待验证 TOTP（在输入正确动态码前绝不生效）";
-                if (SetupTotpButton != null) SetupTotpButton.Content = "重新生成 TOTP";
-                if (DisableTotpButton != null) DisableTotpButton.Visibility = Visibility.Collapsed;
-                DisplayTotpSetupCard(_settings.PendingTotpSecret);
             }
             else
             {
