@@ -1,7 +1,7 @@
 <Window x:Class="ClassIsland.Automation.V1.Views.ChatWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:models="clr-namespace:ClassIsland.Automation.Core.Models;assembly=ClassIsland.Automation.Core"
+        xmlns:models="clr-namespace:ClassIsland.Automation.Core.Models"
         xmlns:mdXaml="clr-namespace:MdXaml;assembly=MdXaml"
         Title="IslandAgent" Width="640" Height="720"
         WindowStartupLocation="CenterScreen">
