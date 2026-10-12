@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 using ClassIsland.Automation.Core.Services;
 
 namespace ClassIsland.Automation.Core.Models;
-
 public enum AiProviderType
 {
     MiMo,

@@ -30,6 +30,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      WPF 构建会先生成一个 *_wpftmp.csproj 临时工程，它不会继承 SDK 默认的隐式 using，
+      导致 Core/ 下的代码报 "The name 'File' does not exist" 之类。
+      这里显式声明，保证正式工程与临时工程都能编译。
+    -->
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="manifest.yml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
