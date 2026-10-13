@@ -1,5 +1,4 @@
 using System.IO;
-using System.Linq;
 using System.Windows.Controls;
 using ClassIsland.Automation.Core.Services;
 using ClassIsland.Automation.V1.Views;
@@ -69,28 +68,49 @@ public class Plugin : PluginBase
             };
 
             // ClassIsland 的托盘菜单在主程序里已经构建好，插件只能在末尾追加，
-            // 直接 Add 会掉到「退出」「调试」下面。所以先追加，再整体挪到
-            // 「换课…」之后、「重启」之前。
+            // 直接 Add 会掉到「退出」「调试」下面。所以先追加再挪位置。
+            //
+            // 目标：跟在「换课…」之后、原有的那一条分割线之前，与「重启/退出」分开。
+            // 注意不要把 AI助手 插到「重启」前面自己再加一条分隔线 ——
+            // 宿主在换课与重启之间本来就有一条 Specator，那样会出现连续两条。
             var menu = taskBarIconService.MainTaskBarIcon.ContextMenu;
             if (menu == null) return;
 
-            var separator = new Separator();
-            menu.Items.Add(separator);
             menu.Items.Add(menuItem);
 
-            // 目标：插在「重启」这一项的前面（它前面本来就是一个 Separator）。
-            var restart = menu.Items.OfType<MenuItem>().FirstOrDefault(m => m.Header?.ToString() == "重启");
-            if (restart != null)
+            var restartIndex = -1;
+            for (int i = 0; i < menu.Items.Count; i++)
             {
-                menu.Items.Remove(separator);
+                if (menu.Items[i] is MenuItem mi && mi.Header?.ToString() == "重启")
+                {
+                    restartIndex = i;
+                    break;
+                }
+            }
+
+            if (restartIndex > 0)
+            {
                 menu.Items.Remove(menuItem);
 
-                // 移除后索引会前移，重新定位「重启」
-                var target = menu.Items.IndexOf(restart);
+                // 重新定位「重启」，若它前面已是分割线，就插到那条线之前
+                var target = -1;
+                for (int i = 0; i < menu.Items.Count; i++)
+                {
+                    if (menu.Items[i] is MenuItem mi && mi.Header?.ToString() == "重启")
+                    {
+                        target = i;
+                        break;
+                    }
+                }
+
+                if (target > 0 && menu.Items[target - 1] is Separator)
+                {
+                    target -= 1;
+                }
+
                 if (target >= 0)
                 {
-                    menu.Items.Insert(target, separator);
-                    menu.Items.Insert(target + 1, menuItem);
+                    menu.Items.Insert(target, menuItem);
                 }
             }
         }

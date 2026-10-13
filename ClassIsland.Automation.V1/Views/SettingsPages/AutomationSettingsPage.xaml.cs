@@ -793,7 +793,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
                     if (TotpVerifyResultTextBlock != null)
                     {
                         TotpVerifyResultTextBlock.Text = "验证通过！TOTP 动态口令已正式生效保护。";
-                        TotpVerifyResultTextBlock.Foreground = new SolidColorBrush(Colors.Green);
+                        // 用主题画刷而不是写死的 Green/Red：后者在深色主题下同样刺眼/不可读，
+                        // 取不到时再回退到系统色。
+                        TotpVerifyResultTextBlock.Foreground =
+                            ThemeBrush("PrimaryHueMidBrush", Brushes.Green);
                     }
                     ShowToast("TOTP 动态口令已正式激活！");
                 }
@@ -802,7 +805,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
                     if (TotpVerifyResultTextBlock != null)
                     {
                         TotpVerifyResultTextBlock.Text = "验证码错误或已失效，请确认手环/手机当前时间并重试。";
-                        TotpVerifyResultTextBlock.Foreground = new SolidColorBrush(Colors.Red);
+                        TotpVerifyResultTextBlock.Foreground =
+                            ThemeBrush("MaterialDesignValidationErrorBrush", Brushes.Red);
                     }
                     ShowToast("TOTP 验证失败，请重试！", isError: true);
                 }
