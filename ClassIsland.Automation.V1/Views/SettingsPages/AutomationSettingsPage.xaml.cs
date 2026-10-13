@@ -335,9 +335,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
         => TryFindResource(key) as Brush ?? fallback;
 
     /// <summary>
-    /// 次要文字画刷。深色主题下写死 Gray 会与背景糊在一起，必须跟随主题。
+    /// 次要文字画刷。ClassIsland 约定用 MaterialDesignBody 配合 Opacity 做弱化，
+    /// MaterialDesignBodyLight 在深色主题下不跟随，会把字压得看不见。
     /// </summary>
-    private Brush SubtleBrush => ThemeBrush("MaterialDesignBodyLight", Brushes.Gray);
+    private Brush SubtleBrush => ThemeBrush("MaterialDesignBody", Brushes.Gray);
 
     private void RenderProvidersList()
     {

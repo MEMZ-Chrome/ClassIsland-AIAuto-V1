@@ -24,13 +24,13 @@
             <StackPanel>
                 <TextBlock Text="AI 助手" FontSize="18" FontWeight="Bold"/>
                 <TextBlock Text="连续智能调课、课表问答与设置调整" FontSize="12"
-                           Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,2,0,0"/>
+                           Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Margin="0,2,0,0"/>
             </StackPanel>
 
             <!-- 对话界面模型快速切换下拉框 -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="当前模型:" VerticalAlignment="Center" FontSize="12"
-                           Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,0,6,0"/>
+                           Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Margin="0,0,6,0"/>
                 <ComboBox Name="ModelSelectComboBox" MinWidth="180" MaxWidth="260" VerticalAlignment="Center" Height="28"/>
             </StackPanel>
         </Grid>
@@ -55,8 +55,8 @@
                                             </Style.Triggers>
                                         </Style>
                                     </StackPanel.Style>
-                                    <TextBlock Text="{Binding TimeString}" FontSize="11"
-                                               Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                    <TextBlock Text="{Binding TimeString}" FontSize="11" Opacity="0.7"
+                                               Foreground="{DynamicResource MaterialDesignBody}"
                                                HorizontalAlignment="Right" Margin="0,0,4,2"/>
                                     <Border Background="{DynamicResource PrimaryHueMidBrush}" CornerRadius="14,14,2,14" Padding="12,8">
                                         <TextBox Text="{Binding Content, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
@@ -82,7 +82,7 @@
                                         <TextBlock Text="AI 助手" FontWeight="SemiBold" FontSize="12"
                                                    Foreground="{DynamicResource MaterialDesignBody}" Margin="0,0,6,0"/>
                                         <TextBlock Text="{Binding TimeString}" FontSize="11"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                   Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7"/>
                                     </StackPanel>
                                     <Border Background="{DynamicResource MaterialDesignCardBackground}"
                                             BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="1"
@@ -106,7 +106,7 @@
                                                                 BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="1"
                                                                 CornerRadius="4" Padding="6,2" Margin="0,2">
                                                             <TextBlock Text="{Binding}" FontSize="11"
-                                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                                       Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7"/>
                                                         </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
@@ -138,7 +138,7 @@
                                     </StackPanel.Style>
                                     <Border Background="{DynamicResource MaterialDesignCardBackground}" CornerRadius="6" Padding="8,4">
                                         <TextBlock Text="{Binding Content}" FontSize="11"
-                                                   Foreground="{DynamicResource MaterialDesignBodyLight}" TextWrapping="Wrap"/>
+                                                   Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" TextWrapping="Wrap"/>
                                     </Border>
                                 </StackPanel>
                             </Grid>
@@ -152,7 +152,7 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,6">
             <Button Name="SelectImageButton" Content="添加课表图片" Padding="8,4"/>
             <TextBlock Name="ImageStatusTextBlock" VerticalAlignment="Center"
-                       Foreground="{DynamicResource MaterialDesignBodyLight}" Text="未选择图片" Margin="8,0,8,0"/>
+                       Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Text="未选择图片" Margin="8,0,8,0"/>
             <Button Name="ClearImageButton" Content="清除" Visibility="Collapsed" Padding="8,4"/>
         </StackPanel>
 
@@ -168,8 +168,8 @@
                          ScrollViewer.VerticalScrollBarVisibility="Hidden"
                          MinHeight="36" MaxHeight="120"
                          VerticalContentAlignment="Center" Padding="6"/>
-                <TextBlock Name="InputWatermarkTextBlock" Text="请输入文本..."
-                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                <TextBlock Name="InputWatermarkTextBlock" Text="请输入文本..." Opacity="0.5"
+                           Foreground="{DynamicResource MaterialDesignBody}"
                            IsHitTestVisible="False" VerticalAlignment="Center" Margin="10,0,0,0">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
