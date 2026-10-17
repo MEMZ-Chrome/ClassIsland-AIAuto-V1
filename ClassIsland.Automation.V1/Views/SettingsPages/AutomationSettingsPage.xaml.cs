@@ -329,16 +329,28 @@ public partial class AutomationSettingsPage : SettingsPageBase
     }
 
     /// <summary>
-    /// 读取主题画刷；资源缺失时回退到默认值，避免深色主题下出现写死的浅色背景。
+    /// 给运行时创建的控件挂上 DynamicResource 引用，而不是塞一个当时取到的画刷实例。
+    ///
+    /// 关键点：如果直接写 `control.Foreground = TryFindResource(...) as Brush`，那是把
+    /// 「当前这一刻的 Brush 实例」存成了本地值。之后用户在设置里切换深浅色时，
+    /// MaterialDesign 会换掉资源字典，但这些控件仍握着旧实例，于是保持旧主题的配色 ——
+    /// 表现为「刚打开正常，切一次主题就看不见」。
+    /// 用 SetResourceReference 注册成动态引用才能跟着主题走。
     /// </summary>
-    private Brush ThemeBrush(string key, Brush fallback)
-        => TryFindResource(key) as Brush ?? fallback;
+    private void BindThemeBrush(DependencyObject target, DependencyProperty property, string key)
+    {
+        if (target == null || property == null) return;
 
-    /// <summary>
-    /// 次要文字画刷。ClassIsland 约定用 MaterialDesignBody 配合 Opacity 做弱化，
-    /// MaterialDesignBodyLight 在深色主题下不跟随，会把字压得看不见。
-    /// </summary>
-    private Brush SubtleBrush => ThemeBrush("MaterialDesignBody", Brushes.Gray);
+        if (TryFindResource(key) != null)
+        {
+            target.SetResourceReference(property, key);
+        }
+        else
+        {
+            // 资源不存在时才退回固定值，避免完全没有前景色
+            target.SetValue(property, Brushes.Gray);
+        }
+    }
 
     private void RenderProvidersList()
     {
@@ -349,19 +361,19 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             var emptyBorder = new Border
             {
-                Background = ThemeBrush("MaterialDesignCardBackground", Brushes.White),
-                BorderBrush = ThemeBrush("MaterialDesignDivider", Brushes.LightGray),
                 BorderThickness = new Thickness(1, 1, 1, 1),
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(24, 24, 24, 24),
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            BindThemeBrush(emptyBorder, Border.BackgroundProperty, "MaterialDesignCardBackground");
+            BindThemeBrush(emptyBorder, Border.BorderBrushProperty, "MaterialDesignDivider");
             var emptyText = new TextBlock
             {
                 Text = "暂无供应商",
-                Foreground = SubtleBrush,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
+            BindThemeBrush(emptyText, TextBlock.ForegroundProperty, "MaterialDesignBody");
             emptyBorder.Child = emptyText;
             ProvidersListContainer.Children.Add(emptyBorder);
             return;
@@ -371,13 +383,13 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             var card = new Border
             {
-                Background = ThemeBrush("MaterialDesignCardBackground", Brushes.White),
-                BorderBrush = ThemeBrush("MaterialDesignDivider", Brushes.LightGray),
                 BorderThickness = new Thickness(1, 1, 1, 1),
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(16, 16, 16, 16),
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            BindThemeBrush(card, Border.BackgroundProperty, "MaterialDesignCardBackground");
+            BindThemeBrush(card, Border.BorderBrushProperty, "MaterialDesignDivider");
 
             var mainStack = new StackPanel();
 
@@ -397,9 +409,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
             {
                 Text = string.IsNullOrWhiteSpace(provider.BaseUrl) ? "(未设置 API 地址)" : provider.BaseUrl,
                 FontSize = 11,
-                Foreground = SubtleBrush,
+                Opacity = 0.7,
                 Margin = new Thickness(0, 2, 0, 0)
             };
+            BindThemeBrush(urlText, TextBlock.ForegroundProperty, "MaterialDesignBody");
             titleStack.Children.Add(nameText);
             titleStack.Children.Add(urlText);
             Grid.SetColumn(titleStack, 0);
@@ -450,9 +463,9 @@ public partial class AutomationSettingsPage : SettingsPageBase
             var divider = new Border
             {
                 Height = 1,
-                Background = ThemeBrush("MaterialDesignDivider", Brushes.LightGray),
                 Margin = new Thickness(0, 8, 0, 8)
             };
+            BindThemeBrush(divider, Border.BackgroundProperty, "MaterialDesignDivider");
             mainStack.Children.Add(divider);
 
             // 模型勾选区域
@@ -461,9 +474,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
             {
                 Text = "模型列表",
                 FontSize = 11,
-                Foreground = SubtleBrush,
+                Opacity = 0.7,
                 Margin = new Thickness(0, 0, 0, 6)
             };
+            BindThemeBrush(modelsLabel, TextBlock.ForegroundProperty, "MaterialDesignBody");
             modelsStack.Children.Add(modelsLabel);
 
             if (provider.Models.Count == 0)
@@ -472,9 +486,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 {
                     Text = "(暂无模型)",
                     FontSize = 11,
-                    Foreground = SubtleBrush,
+                    Opacity = 0.7,
                     FontStyle = FontStyles.Italic
                 };
+                BindThemeBrush(noModelsText, TextBlock.ForegroundProperty, "MaterialDesignBody");
                 modelsStack.Children.Add(noModelsText);
             }
             else
@@ -548,10 +563,11 @@ public partial class AutomationSettingsPage : SettingsPageBase
             var hint = new TextBlock
             {
                 Text = "暂无模型",
-                Foreground = SubtleBrush,
+                Opacity = 0.7,
                 FontSize = 12,
                 Margin = new Thickness(4, 4, 4, 4)
             };
+            BindThemeBrush(hint, TextBlock.ForegroundProperty, "MaterialDesignBody");
             DialogModelsContainer.Children.Add(hint);
             return;
         }
@@ -793,10 +809,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
                     if (TotpVerifyResultTextBlock != null)
                     {
                         TotpVerifyResultTextBlock.Text = "验证通过！TOTP 动态口令已正式生效保护。";
-                        // 用主题画刷而不是写死的 Green/Red：后者在深色主题下同样刺眼/不可读，
-                        // 取不到时再回退到系统色。
-                        TotpVerifyResultTextBlock.Foreground =
-                            ThemeBrush("PrimaryHueMidBrush", Brushes.Green);
+                        // 用动态引用而不是写死的 Green/Red，才能跟随运行时切换深浅色
+                        BindThemeBrush(TotpVerifyResultTextBlock, TextBlock.ForegroundProperty, "PrimaryHueMidBrush");
                     }
                     ShowToast("TOTP 动态口令已正式激活！");
                 }
@@ -805,8 +819,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
                     if (TotpVerifyResultTextBlock != null)
                     {
                         TotpVerifyResultTextBlock.Text = "验证码错误或已失效，请确认手环/手机当前时间并重试。";
-                        TotpVerifyResultTextBlock.Foreground =
-                            ThemeBrush("MaterialDesignValidationErrorBrush", Brushes.Red);
+                        BindThemeBrush(TotpVerifyResultTextBlock, TextBlock.ForegroundProperty, "MaterialDesignValidationErrorBrush");
                     }
                     ShowToast("TOTP 验证失败，请重试！", isError: true);
                 }
