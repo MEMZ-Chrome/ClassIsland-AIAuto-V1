@@ -337,7 +337,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
     /// 表现为「刚打开正常，切一次主题就看不见」。
     /// 用 SetResourceReference 注册成动态引用才能跟着主题走。
     /// </summary>
-    private void BindThemeBrush(DependencyObject target, DependencyProperty property, string key)
+    private void BindThemeBrush(FrameworkElement target, DependencyProperty property, string key)
     {
         if (target == null || property == null) return;
 
