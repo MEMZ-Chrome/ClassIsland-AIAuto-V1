@@ -177,7 +177,7 @@ public class AiClientService
             if (!response.IsSuccessStatusCode)
             {
                 // 根地址少写了 /v1 时首个候选会 404，切换到下一个候选重发本轮。
-                if (response.StatusCode == HttpStatusCode.NotFound && chatUrlIndex + 1 < chatUrlCandidates.Count)
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound && chatUrlIndex + 1 < chatUrlCandidates.Count)
                 {
                     chatUrlIndex++;
                     iterations--;
