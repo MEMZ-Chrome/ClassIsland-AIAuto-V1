@@ -108,6 +108,9 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 _settings.IsAiSessionTitleEnabled = updated.IsAiSessionTitleEnabled;
                 if (AiSessionTitleCheckBox != null) AiSessionTitleCheckBox.IsChecked = updated.IsAiSessionTitleEnabled;
 
+                _settings.IsBackgroundTaskNotificationEnabled = updated.IsBackgroundTaskNotificationEnabled;
+                if (BackgroundTaskNotificationCheckBox != null) BackgroundTaskNotificationCheckBox.IsChecked = updated.IsBackgroundTaskNotificationEnabled;
+
                 _settings.MaxToolIterations = updated.MaxToolIterations;
                 if (MaxToolIterationsTextBox != null) MaxToolIterationsTextBox.Text = updated.EffectiveMaxToolIterations.ToString();
             }
@@ -287,6 +290,12 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             AiSessionTitleCheckBox.IsChecked = _settings.IsAiSessionTitleEnabled;
             AiSessionTitleCheckBox.Click += (_, _) => AutoSave();
+        }
+
+        if (BackgroundTaskNotificationCheckBox != null)
+        {
+            BackgroundTaskNotificationCheckBox.IsChecked = _settings.IsBackgroundTaskNotificationEnabled;
+            BackgroundTaskNotificationCheckBox.Click += (_, _) => AutoSave();
         }
 
         if (MaxToolIterationsTextBox != null)
@@ -774,6 +783,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
         _settings.IsMultiSessionEnabled = IsMultiSessionEnabledCheckBox?.IsChecked ?? true;
         _settings.IsNewSessionOnOpenEnabled = NewSessionOnOpenCheckBox?.IsChecked ?? false;
         _settings.IsAiSessionTitleEnabled = AiSessionTitleCheckBox?.IsChecked ?? false;
+        _settings.IsBackgroundTaskNotificationEnabled = BackgroundTaskNotificationCheckBox?.IsChecked ?? false;
 
         // 填了非法内容就退回默认值，不把 0 或负数带进对话循环。
         _settings.MaxToolIterations = int.TryParse(MaxToolIterationsTextBox?.Text?.Trim(), out var parsedIterations)

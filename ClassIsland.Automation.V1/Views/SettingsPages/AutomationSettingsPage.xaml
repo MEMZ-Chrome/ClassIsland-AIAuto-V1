@@ -86,6 +86,8 @@
                                       Content="每次打开对话窗口时新建会话（关闭则继续上一次会话）"/>
                             <CheckBox Name="AiSessionTitleCheckBox"
                                       Content="会话标题由 AI 总结生成（每会话首次对话后自动命名，额外消耗少量 token）"/>
+                            <CheckBox Name="BackgroundTaskNotificationCheckBox"
+                                      Content="后台任务完成时发送系统通知"/>
                             <TextBlock Text="对话历史保存在本机插件目录的 sessions.json 中，最多保留最近 30 个会话；关闭多会话模式后仍按单会话继续使用最近一次历史。"
                                        FontSize="12" TextWrapping="Wrap" Margin="28,4,0,16"
                                        Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7"/>

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Controls;
 using ClassIsland.Automation.Core.Services;
+using ClassIsland.Automation.V1.Services;
 using ClassIsland.Automation.V1.Views;
 using ClassIsland.Automation.V1.Views.SettingsPages;
 using ClassIsland.Core;
@@ -19,6 +20,7 @@ public class Plugin : PluginBase
 {
     public static Plugin? Instance { get; private set; }
     private ChatWindow? _chatWindow;
+    private BackgroundNotificationProvider? _notificationProvider;
 
     public override void Initialize(HostBuilderContext context, IServiceCollection services)
     {
@@ -30,6 +32,9 @@ public class Plugin : PluginBase
         Directory.CreateDirectory(configDir);
         SettingsManager.SetSettingsFilePath(Path.Combine(configDir, "settings.json"));
 
+        // 后台任务完成时按用户设置转发到宿主通知系统（懒初始化，宿主服务就绪后才可用）
+        ChatSessionManager.Instance.BackgroundNotificationRequested += OnBackgroundNotificationRequested;
+
         // 1. 注册设置页面
         services.AddSettingsPage<AutomationSettingsPage>();
 
@@ -38,6 +43,19 @@ public class Plugin : PluginBase
         {
             RegisterTrayMenu();
         };
+    }
+
+    private void OnBackgroundNotificationRequested(string title, string message)
+    {
+        try
+        {
+            _notificationProvider ??= new BackgroundNotificationProvider();
+            _notificationProvider.Notify(title, message);
+        }
+        catch
+        {
+            // 通知失败不影响任务结果
+        }
     }
 
     private void RegisterTrayMenu()

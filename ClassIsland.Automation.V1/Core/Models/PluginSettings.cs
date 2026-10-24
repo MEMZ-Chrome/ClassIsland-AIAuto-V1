@@ -115,6 +115,8 @@ public class PluginSettings
     public bool IsNewSessionOnOpenEnabled { get; set; } = false;
     /// <summary>会话标题由 AI 总结生成（每会话首次对话后自动命名，额外消耗少量 token）。</summary>
     public bool IsAiSessionTitleEnabled { get; set; } = false;
+    /// <summary>对话任务在后台完成时发送系统通知提醒。</summary>
+    public bool IsBackgroundTaskNotificationEnabled { get; set; } = false;
 
     // 长期记忆系统
     public string CustomMemory { get; set; } = "";
