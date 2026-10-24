@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ClassIsland.Automation.Core.Models;
 using ClassIsland.Automation.Core.Services;
@@ -28,6 +29,14 @@ public partial class ChatWindow : Window
     /// <summary>系统消息之外保留的最大历史条数，超过即从最旧回合截断，防止上下文无限膨胀。</summary>
     private const int MaxHistoryMessages = 60;
 
+    // ---- 多会话状态 ----
+    private List<ChatSession> _sessions = new();
+    private string _activeSessionId = "";
+    private bool _sidebarExpanded = true;
+
+    private string SessionsFilePath => Path.Combine(
+        Plugin.Instance?.PluginConfigFolder ?? AppContext.BaseDirectory, "sessions.json");
+
     public ChatWindow(IProfileService? profileService = null, IUriNavigationService? uriService = null)
     {
         InitializeComponent();
@@ -43,6 +52,8 @@ public partial class ChatWindow : Window
         if (ClearImageButton != null) ClearImageButton.Click += OnClearImageClicked;
         if (SendButton != null) SendButton.Click += (s, e) => SendCurrentMessage();
         if (NewSessionButton != null) NewSessionButton.Click += OnNewSessionClicked;
+        if (SidebarNewSessionButton != null) SidebarNewSessionButton.Click += OnNewSessionClicked;
+        if (SidebarToggleButton != null) SidebarToggleButton.Click += OnSidebarToggleClicked;
 
         // 下拉框切换只订阅一次。放在 InitModelSelector 里会随每次外部配置刷新
         // 叠加一个匿名处理器，用户每切一次模型就多并发执行一轮保存与写盘。
@@ -78,12 +89,18 @@ public partial class ChatWindow : Window
 
         _settings = LoadPluginSettings();
         InitModelSelector();
-        InitConversation();
+        InitializeSessions();
 
         // 设置页或 AI 工具改了供应商/模型后，下拉框要跟着刷新，
         // 否则会继续持有已被删除的 ActiveModelOption，发送时又把它写回配置。
         SettingsManager.SettingsChanged += OnSettingsChangedExternally;
-        Closed += (_, _) => SettingsManager.SettingsChanged -= OnSettingsChangedExternally;
+        Closed += (_, _) =>
+        {
+            SettingsManager.SettingsChanged -= OnSettingsChangedExternally;
+            // 关窗前把当前会话状态落盘
+            CaptureCurrentSession();
+            PersistSessions();
+        };
     }
 
     private void OnSettingsChangedExternally(PluginSettings updated)
@@ -103,6 +120,10 @@ public partial class ChatWindow : Window
                     .FirstOrDefault(o => o.DisplayText == previous);
                 if (match != null) ModelSelectComboBox.SelectedItem = match;
             }
+
+            // 多会话开关可能被外部修改，侧栏显隐与会话列表要跟着刷新
+            UpdateSidebarVisibility();
+            RenderSessionList();
         });
     }
 
@@ -195,29 +216,314 @@ public partial class ChatWindow : Window
         return sb.ToString();
     }
 
-    private void InitConversation()
+    // ==================== 多会话管理 ====================
+
+    /// <summary>
+    /// 启动时恢复会话：无历史会话或设置了「每次打开时新建会话」则新建，
+    /// 否则继续最近活跃的会话。多会话与单会话模式共用同一套存储
+    /// （单会话只是不显示侧栏，始终操作最近的一个会话）。
+    /// </summary>
+    private void InitializeSessions()
     {
+        _sessions = ChatSessionStore.Load(SessionsFilePath);
+
+        if (_sessions.Count == 0 || _settings.IsNewSessionOnOpenEnabled)
+        {
+            CreateNewSession();
+        }
+        else
+        {
+            var latest = _sessions.OrderByDescending(s => s.LastActiveAt).First();
+            _activeSessionId = latest.Id;
+            _conversationMessages.Clear();
+            foreach (var m in latest.Messages)
+            {
+                if (m != null) _conversationMessages.Add(m.DeepClone());
+            }
+            EnsureSystemMessage();
+            RebuildDisplayFromContext();
+        }
+
+        UpdateSidebarVisibility();
+        RenderSessionList();
+        ScrollToBottom();
+    }
+
+    private void CreateNewSession()
+    {
+        CaptureCurrentSession();
+
+        var session = new ChatSession { Title = "新会话" };
+        _sessions.Add(session);
+        _activeSessionId = session.Id;
+
         _conversationMessages.Clear();
         _displayMessages.Clear();
-
-        var settings = LoadPluginSettings();
-        _conversationMessages.Add(new JsonObject
-        {
-            ["role"] = "system",
-            ["content"] = BuildSystemPrompt(settings)
-        });
-
-        var now = DateTime.Now;
-        var todayStr = ToolExecutor.GetChineseWeekDay(now.DayOfWeek);
-
+        EnsureSystemMessage();
         _displayMessages.Add(new ChatMessageItem
         {
             Role = ChatRole.Assistant,
-            TimeString = now.ToString("HH:mm"),
+            TimeString = DateTime.Now.ToString("HH:mm"),
             Content = "你好，我是 ClassIsland AI 助手。"
         });
 
+        PersistSessions();
+        RenderSessionList();
         ScrollToBottom();
+    }
+
+    private void ActivateSession(ChatSession session)
+    {
+        if (_isSending || session.Id == _activeSessionId) return;
+        CaptureCurrentSession();
+
+        _activeSessionId = session.Id;
+        _conversationMessages.Clear();
+        foreach (var m in session.Messages)
+        {
+            if (m != null) _conversationMessages.Add(m.DeepClone());
+        }
+        EnsureSystemMessage();
+        RebuildDisplayFromContext();
+
+        PersistSessions();
+        RenderSessionList();
+        ScrollToBottom();
+    }
+
+    private void DeleteSession(ChatSession session)
+    {
+        if (_isSending) return;
+        _sessions.Remove(session);
+
+        if (session.Id == _activeSessionId)
+        {
+            _activeSessionId = "";
+            _conversationMessages.Clear();
+            _displayMessages.Clear();
+
+            if (_sessions.Count > 0)
+            {
+                var latest = _sessions.OrderByDescending(s => s.LastActiveAt).First();
+                _activeSessionId = latest.Id;
+                foreach (var m in latest.Messages)
+                {
+                    if (m != null) _conversationMessages.Add(m.DeepClone());
+                }
+                EnsureSystemMessage();
+                RebuildDisplayFromContext();
+            }
+            else
+            {
+                CreateNewSession();
+                return;
+            }
+        }
+
+        PersistSessions();
+        RenderSessionList();
+        ScrollToBottom();
+    }
+
+    /// <summary>把当前对话上下文写回活跃会话（剥离 system、把多段内容归一为纯文本）。</summary>
+    private void CaptureCurrentSession()
+    {
+        var current = _sessions.FirstOrDefault(s => s.Id == _activeSessionId);
+        if (current == null) return;
+
+        current.Messages.Clear();
+        foreach (var node in _conversationMessages)
+        {
+            if (node is not JsonObject o) continue;
+            if (o["role"]?.GetValue<string>() == "system") continue;
+
+            if (node.DeepClone() is JsonObject clone)
+            {
+                clone["content"] = NormalizeContentToString(clone["content"]);
+                current.Messages.Add(clone);
+            }
+        }
+        current.LastActiveAt = DateTime.Now;
+        var title = DeriveSessionTitle(current);
+        if (!string.IsNullOrWhiteSpace(title)) current.Title = title;
+    }
+
+    private void PersistSessions()
+    {
+        ChatSessionStore.Save(SessionsFilePath, _sessions);
+    }
+
+    private void EnsureSystemMessage()
+    {
+        var prompt = BuildSystemPrompt(_settings);
+        if (_conversationMessages.Count > 0 && _conversationMessages[0]?["role"]?.GetValue<string>() == "system")
+        {
+            _conversationMessages[0] = new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = prompt
+            };
+        }
+        else
+        {
+            _conversationMessages.Insert(0, new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = prompt
+            });
+        }
+    }
+
+    /// <summary>从会话上下文重建聊天气泡（工具消息只服务于模型上下文，不在界面重放）。</summary>
+    private void RebuildDisplayFromContext()
+    {
+        _displayMessages.Clear();
+        foreach (var node in _conversationMessages)
+        {
+            if (node is not JsonObject o) continue;
+            var role = o["role"]?.GetValue<string>();
+            var content = NormalizeContentToString(o["content"]);
+            if (string.IsNullOrWhiteSpace(content)) continue;
+
+            if (role == "user")
+            {
+                _displayMessages.Add(new ChatMessageItem { Role = ChatRole.User, TimeString = "", Content = content });
+            }
+            else if (role == "assistant")
+            {
+                _displayMessages.Add(new ChatMessageItem { Role = ChatRole.Assistant, TimeString = "", Content = content });
+            }
+        }
+    }
+
+    /// <summary>把消息 content（字符串或多段数组）归一为纯文本，多段数组里的图片转为占位说明。</summary>
+    private static string NormalizeContentToString(JsonNode? content)
+    {
+        if (content is JsonArray arr)
+        {
+            var parts = new List<string>();
+            var hasImage = false;
+            foreach (var p in arr)
+            {
+                if (p is not JsonObject po) continue;
+                switch (po["type"]?.GetValue<string>())
+                {
+                    case "text":
+                        var t = po["text"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(t)) parts.Add(t.Trim());
+                        break;
+                    case "image_url":
+                        hasImage = true;
+                        break;
+                }
+            }
+            var text = string.Join("\n", parts);
+            if (hasImage)
+            {
+                text = string.IsNullOrWhiteSpace(text) ? "（用户上传了一张课表图片）" : text + "（用户上传了一张课表图片）";
+            }
+            return text;
+        }
+
+        try { return content?.GetValue<string>() ?? ""; }
+        catch { return ""; }
+    }
+
+    private static string DeriveSessionTitle(ChatSession session)
+    {
+        foreach (var node in session.Messages)
+        {
+            if (node is not JsonObject o) continue;
+            if (o["role"]?.GetValue<string>() != "user") continue;
+            var text = NormalizeContentToString(o["content"]);
+            if (string.IsNullOrWhiteSpace(text)) continue;
+            text = text.Replace("\n", " ").Trim();
+            return text.Length <= 16 ? text : text[..16] + "…";
+        }
+        return "新会话";
+    }
+
+    private void RenderSessionList()
+    {
+        if (SessionListStackPanel == null) return;
+        SessionListStackPanel.Children.Clear();
+
+        foreach (var session in _sessions.OrderByDescending(s => s.LastActiveAt))
+        {
+            var isActive = session.Id == _activeSessionId;
+            var captured = session; // 避免闭包捕获循环变量
+
+            var title = new TextBlock
+            {
+                Text = session.Title,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand
+            };
+            if (isActive) title.FontWeight = FontWeights.SemiBold;
+            title.ToolTip = $"{session.Title}（{session.LastActiveAt:MM-dd HH:mm}）";
+            title.MouseLeftButtonUp += (_, _) => ActivateSession(captured);
+
+            var deleteButton = new Button
+            {
+                Content = "✕",
+                FontSize = 11,
+                Padding = new Thickness(6, 2, 6, 2)
+            };
+            deleteButton.Click += (_, _) => DeleteSession(captured);
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(deleteButton, 1);
+            grid.Children.Add(title);
+            grid.Children.Add(deleteButton);
+
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(8, 6, 8, 6),
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+            if (isActive)
+            {
+                // 用资源引用而非 TryFindResource 赋值，深浅主题切换时才能跟随更新
+                border.SetResourceReference(Border.BackgroundProperty, "MaterialDesignCardBackground");
+            }
+            else
+            {
+                border.Background = Brushes.Transparent;
+            }
+            border.Child = grid;
+
+            SessionListStackPanel.Children.Add(border);
+        }
+    }
+
+    /// <summary>多会话模式：显示侧栏与「会话列表」开关、隐藏顶部新建按钮；单会话模式反之。</summary>
+    private void UpdateSidebarVisibility()
+    {
+        var multi = _settings.IsMultiSessionEnabled;
+        if (SessionSidebarBorder != null)
+        {
+            SessionSidebarBorder.Visibility = multi && _sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (SidebarToggleButton != null)
+        {
+            SidebarToggleButton.Visibility = multi ? Visibility.Visible : Visibility.Collapsed;
+            SidebarToggleButton.Content = _sidebarExpanded ? "收起会话" : "会话列表";
+        }
+        if (NewSessionButton != null)
+        {
+            NewSessionButton.Visibility = multi ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
+    private void OnSidebarToggleClicked(object? sender, RoutedEventArgs e)
+    {
+        _sidebarExpanded = !_sidebarExpanded;
+        UpdateSidebarVisibility();
     }
 
     private void ScrollToBottom()
@@ -477,6 +783,10 @@ public partial class ChatWindow : Window
                 StripImageFromHistory(userMessageIndex, textContent);
             }
 
+            // 回合结束把会话状态落盘（含标题、最后活跃时间）
+            CaptureCurrentSession();
+            PersistSessions();
+
             if (SendButton != null) SendButton.IsEnabled = true;
         }
     }
@@ -520,8 +830,8 @@ public partial class ChatWindow : Window
 
     private void OnNewSessionClicked(object? sender, RoutedEventArgs e)
     {
-        // 发送过程中清空会与进行中的 ReAct 循环竞争 _conversationMessages
+        // 发送过程中切换/新建会与进行中的 ReAct 循环竞争 _conversationMessages
         if (_isSending) return;
-        InitConversation();
+        CreateNewSession();
     }
 }

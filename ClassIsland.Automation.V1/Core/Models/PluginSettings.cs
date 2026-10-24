@@ -108,6 +108,12 @@ public class PluginSettings
     [JsonIgnore]
     public int EffectiveMaxToolIterations => Math.Clamp(MaxToolIterations, 1, 50);
 
+    // 多会话对话
+    /// <summary>启用后聊天窗口左侧显示会话列表，各会话历史独立保存。</summary>
+    public bool IsMultiSessionEnabled { get; set; } = true;
+    /// <summary>每次打开对话窗口时直接新建会话；关闭则继续上一次会话。</summary>
+    public bool IsNewSessionOnOpenEnabled { get; set; } = false;
+
     // 长期记忆系统
     public string CustomMemory { get; set; } = "";
     public bool IsMemoryEnabled { get; set; } = true;

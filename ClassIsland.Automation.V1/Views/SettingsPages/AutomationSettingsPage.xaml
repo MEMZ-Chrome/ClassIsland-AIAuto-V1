@@ -78,6 +78,16 @@
                                        TextWrapping="Wrap" Margin="28,4,0,16"
                                        Foreground="{DynamicResource MaterialDesignValidationErrorBrush}"/>
 
+                            <!-- 会话管理 -->
+                            <TextBlock Text="会话管理" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <CheckBox Name="IsMultiSessionEnabledCheckBox"
+                                      Content="启用多会话模式（聊天窗口左侧显示会话列表，各会话历史独立）" IsChecked="True" Margin="0,0,0,8"/>
+                            <CheckBox Name="NewSessionOnOpenCheckBox"
+                                      Content="每次打开对话窗口时新建会话（关闭则继续上一次会话）"/>
+                            <TextBlock Text="对话历史保存在本机插件目录的 sessions.json 中，最多保留最近 30 个会话；关闭多会话模式后仍按单会话继续使用最近一次历史。"
+                                       FontSize="12" TextWrapping="Wrap" Margin="28,4,0,16"
+                                       Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7"/>
+
                             <!-- 工具调用轮数上限 -->
                             <TextBlock Text="工具调用轮数上限" FontWeight="SemiBold" Margin="0,0,0,6"/>
                             <Grid Margin="0,0,0,16">

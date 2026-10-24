@@ -8,12 +8,37 @@
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}">
     <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- 会话列表侧栏（仅多会话模式显示，可折叠） -->
+        <Border Name="SessionSidebarBorder" Width="180" Margin="0,0,12,0" Visibility="Collapsed"
+                BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="1"
+                CornerRadius="8" Background="{DynamicResource MaterialDesignBackground}" Padding="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="会话" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button Name="SidebarNewSessionButton" Content="＋ 新建" FontSize="12" Padding="8,3" Margin="8,0,0,0"/>
+                </StackPanel>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Name="SessionListStackPanel"/>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
         <!-- 头部说明、模型选择与状态 -->
         <Grid Grid.Row="0" Margin="0,0,0,12">
@@ -29,6 +54,8 @@
 
             <!-- 对话界面模型快速切换下拉框 -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Name="SidebarToggleButton" Content="会话列表" FontSize="12" Padding="12,2"
+                        VerticalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed"/>
                 <Button Name="NewSessionButton" Content="新建会话" FontSize="12" Margin="0,0,12,0"
                         VerticalAlignment="Center" Padding="12,2"/>
                 <TextBlock Text="当前模型:" VerticalAlignment="Center" FontSize="12"
@@ -187,6 +214,7 @@
             </Grid>
             <Button Name="SendButton" Grid.Column="1" Content="发送" Margin="8,0,0,0" Padding="16,6"
                     VerticalAlignment="Bottom"/>
+        </Grid>
         </Grid>
     </Grid>
 </Window>
