@@ -688,6 +688,17 @@ public partial class AutomationSettingsPage : SettingsPageBase
             return;
         }
 
+        // 同名供应商会让按名解析永远只命中第一个，第二个在 AI 工具视角下无法访问
+        bool duplicateName = _dialogEditingProvider == null
+            ? _settings.Providers.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            : _settings.Providers.Any(p => p != _dialogEditingProvider
+                                           && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (duplicateName)
+        {
+            ShowToast($"已存在名为「{name}」的供应商，请换一个别名！", isError: true);
+            return;
+        }
+
         if (_dialogEditingProvider == null)
         {
             var newP = new AiProviderConfig

@@ -148,7 +148,9 @@ public class ToolExecutor
             ["subjectCount"] = p.Subjects.Count,
             ["subjects"] = new JsonArray(p.Subjects.Values.Select(s => (JsonNode)s.Name).ToArray()),
             ["timeLayouts"] = new JsonArray(p.TimeLayouts.Values.Select(t => (JsonNode)t.Name).ToArray()),
-            ["classPlans"] = new JsonArray(p.ClassPlans.Values.Select(c => (JsonNode)c.Name).ToArray()),
+            // 临时层课表会随每次调课不断产生（过期后由宿主负责清理），
+            // 混进概览只会白白浪费上下文；某天生效的调课可通过 get_schedule_details 查看。
+            ["classPlans"] = new JsonArray(p.ClassPlans.Values.Where(c => !c.IsOverlay).Select(c => (JsonNode)c.Name).ToArray()),
             ["isOverlayEnabled"] = p.IsOverlayClassPlanEnabled,
             ["activeOverlayId"] = string.IsNullOrEmpty(ProfileCompat.GetOverlayClassPlanId(p)) ? "无" : ProfileCompat.GetOverlayClassPlanId(p)
         };
@@ -183,6 +185,23 @@ public class ToolExecutor
             queryPlans = queryPlans.Where(kv =>
                 kv.Value.Name.Contains(planNameQuery, StringComparison.OrdinalIgnoreCase) ||
                 NormalizeWeekDayName(kv.Value.Name).Contains(NormalizeWeekDayName(planNameQuery)));
+        }
+        else if (!string.IsNullOrWhiteSpace(targetDateQuery))
+        {
+            // 只给了日期时，按该日期对应的星期筛选课表，并优先返回当天实际生效的那一份。
+            var queryDate = ResolveTargetDate(targetDateQuery, null);
+            var targetDay = (int)queryDate.DayOfWeek;
+
+            var sameDay = queryPlans.Where(kv => !kv.Value.IsOverlay && kv.Value.TimeRule.WeekDay == targetDay).ToList();
+            if (sameDay.Count == 0)
+            {
+                var dayChar = GetChineseWeekDayChar(queryDate.DayOfWeek);
+                sameDay = queryPlans.Where(kv => !kv.Value.IsOverlay && kv.Value.Name.Contains(dayChar)).ToList();
+            }
+            if (sameDay.Count > 0)
+            {
+                queryPlans = sameDay;
+            }
         }
 
         foreach (var kv in queryPlans)
@@ -276,19 +295,33 @@ public class ToolExecutor
             if (string.IsNullOrWhiteSpace(name)) continue;
 
             var initial = sObj["initial"]?.GetValue<string>()?.Trim();
-            var teacher = sObj["teacherName"]?.GetValue<string>()?.Trim() ?? "";
-            var isOutDoor = sObj["isOutDoor"]?.GetValue<bool>() ?? false;
 
             var existingEntry = profile.Subjects.FirstOrDefault(kv => string.Equals(kv.Value.Name, name, StringComparison.OrdinalIgnoreCase));
             if (existingEntry.Value != null)
             {
-                existingEntry.Value.TeacherName = teacher;
-                existingEntry.Value.IsOutDoor = isOutDoor;
+                // 增量更新：只覆盖模型本次明确传递的字段。
+                // 否则「把数学改为张老师」这类未传 isOutDoor 的指令会把原有的室外课标记、
+                // 任课老师等已配置数据静默重置为默认值。
+                if (sObj["teacherName"] is JsonNode teacherNode)
+                {
+                    try { existingEntry.Value.TeacherName = teacherNode.GetValue<string>()?.Trim() ?? ""; }
+                    catch { /* 类型不符，保持原值 */ }
+                }
+                if (sObj["isOutDoor"] is JsonNode outDoorNode)
+                {
+                    try { existingEntry.Value.IsOutDoor = outDoorNode.GetValue<bool>(); }
+                    catch { /* 类型不符，保持原值 */ }
+                }
                 if (!string.IsNullOrWhiteSpace(initial)) existingEntry.Value.Initial = initial;
                 updatedCount++;
             }
             else
             {
+                var teacher = "";
+                try { teacher = sObj["teacherName"]?.GetValue<string>()?.Trim() ?? ""; } catch { }
+                var isOutDoor = false;
+                try { isOutDoor = sObj["isOutDoor"]?.GetValue<bool>() ?? false; } catch { }
+
                 var newSub = new Subject
                 {
                     Name = name,
@@ -427,6 +460,35 @@ public class ToolExecutor
             return new ToolExecutionResult { ToolCallId = toolId, Name = "set_class_plan", Success = false, Result = "缺少 classes 课程列表" };
         }
 
+        if (clsArray.Count == 0)
+        {
+            return new ToolExecutionResult
+            {
+                ToolCallId = toolId,
+                Name = "set_class_plan",
+                Success = false,
+                Result = "classes 为空，未做任何修改（避免清空现有课表）。"
+            };
+        }
+
+        // 先校验所有元素都是字符串，再动现有课表。
+        // 否则中途失败时 plan.Classes 已被 Clear，内存对象处于半修改状态。
+        var classNames = new List<string>();
+        foreach (var node in clsArray)
+        {
+            if (node == null || node.GetValueKind() != System.Text.Json.JsonValueKind.String)
+            {
+                return new ToolExecutionResult
+                {
+                    ToolCallId = toolId,
+                    Name = "set_class_plan",
+                    Success = false,
+                    Result = "classes 中存在非字符串元素，未做任何修改。"
+                };
+            }
+            classNames.Add(node.GetValue<string>().Trim());
+        }
+
         var timeLayoutId = "";
         if (!string.IsNullOrWhiteSpace(timeLayoutName))
         {
@@ -438,7 +500,9 @@ public class ToolExecutor
             timeLayoutId = ProfileCompat.FirstTimeLayoutId(profile);
         }
 
-        var subMap = profile.Subjects.ToDictionary(kv => kv.Value.Name, kv => Convert.ToString(kv.Key) ?? "", StringComparer.OrdinalIgnoreCase);
+        var subMap = profile.Subjects
+            .GroupBy(kv => kv.Value.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => Convert.ToString(g.First().Key) ?? "", StringComparer.OrdinalIgnoreCase);
 
         var existingPlan = profile.ClassPlans.FirstOrDefault(kv => string.Equals(kv.Value.Name, planName, StringComparison.OrdinalIgnoreCase));
         ClassPlan plan;
@@ -465,9 +529,9 @@ public class ToolExecutor
             plan.TimeRule.WeekDay = detectedWeekDay;
         }
 
-        for (int i = 0; i < clsArray.Count; i++)
+        for (int i = 0; i < classNames.Count; i++)
         {
-            var subName = clsArray[i]?.GetValue<string>()?.Trim() ?? "";
+            var subName = classNames[i];
             var subId = "";
             if (!string.IsNullOrWhiteSpace(subName))
             {
@@ -596,7 +660,9 @@ public class ToolExecutor
         }
 
         string changeDescription = "";
-        var subMap = profile.Subjects.ToDictionary(kv => kv.Value.Name, kv => Convert.ToString(kv.Key) ?? "", StringComparer.OrdinalIgnoreCase);
+        var subMap = profile.Subjects
+            .GroupBy(kv => kv.Value.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => Convert.ToString(g.First().Key) ?? "", StringComparer.OrdinalIgnoreCase);
 
         var targetIndices = new List<int>();
         if (args.TryGetPropertyValue("classIndices", out var cisNode) && cisNode is JsonArray cisArr)
@@ -625,9 +691,12 @@ public class ToolExecutor
             }
 
             var changedSlots = new List<string>();
+            var skippedSlots = new List<string>();
             foreach (var ci in targetIndices)
             {
-                int targetIdx = ci == -1 ? tempPlan.Classes.Count - 1 : (ci > 0 ? ci - 1 : 0);
+                // Schema 约定 classIndex 从 1 开始，负数表示倒数（-1 为最后一节）。
+                // 0 或越界序号一律跳过并明确告知模型，绝不能静默落到第 1 节造成破坏性调课。
+                int targetIdx = ci > 0 ? ci - 1 : ci < 0 ? tempPlan.Classes.Count + ci : -1;
                 if (targetIdx >= 0 && targetIdx < tempPlan.Classes.Count)
                 {
                     var oldSubName = ProfileCompat.TryGetSubject(profile, ProfileCompat.GetSubjectId(tempPlan.Classes[targetIdx]), out var oldSub) && oldSub != null ? oldSub.Name : "未定";
@@ -635,16 +704,30 @@ public class ToolExecutor
                     tempPlan.Classes[targetIdx].IsChangedClass = true;
                     changedSlots.Add($"第 {targetIdx + 1} 节（原【{oldSubName}】）");
                 }
+                else
+                {
+                    skippedSlots.Add($"节次 {ci} 不存在（当天共 {tempPlan.Classes.Count} 节）");
+                }
             }
 
-            changeDescription = $"已将 {string.Join(" 与 ", changedSlots)} 变更为【{subjectName}】";
+            changeDescription = changedSlots.Count > 0
+                ? $"已将 {string.Join(" 与 ", changedSlots)} 变更为【{subjectName}】"
+                : "未调整任何节次";
+            if (skippedSlots.Count > 0)
+            {
+                changeDescription += $"\n• 以下节次序号无效已跳过：{string.Join("、", skippedSlots)}（节次从 1 开始，-1 表示最后一节）";
+            }
         }
         else if (args.TryGetPropertyValue("modifiedClasses", out var modNode) && modNode is JsonArray modArr)
         {
             int changedCount = 0;
             for (int i = 0; i < Math.Min(modArr.Count, tempPlan.Classes.Count); i++)
             {
-                var sName = modArr[i]?.GetValue<string>()?.Trim();
+                // 模型偶尔会把单节写成对象（如 {"subject":"数学"}），
+                // GetValue<string> 对非字符串节点会直接抛异常导致整次调课失败，这里按无效跳过。
+                var modItem = modArr[i];
+                if (modItem == null || modItem.GetValueKind() != JsonValueKind.String) continue;
+                var sName = modItem.GetValue<string>().Trim();
                 if (string.IsNullOrWhiteSpace(sName)) continue;
 
                 if (!subMap.TryGetValue(sName, out var sGuid))
@@ -998,6 +1081,26 @@ public class ToolExecutor
         _pluginSettings.EnsureProvidersInitialized();
         var changes = new List<string>();
         var action = args["action"]?.ToString().Trim().ToLowerInvariant() ?? "";
+
+        // ---------- 敏感操作鉴权 ----------
+        // 设置了密码/TOTP 后，供应商增删改、提示词、长期记忆与命令行权限必须走已解锁的设置页。
+        // 否则任何人在未解锁的聊天窗口里说一句「把 API 地址改成 xxx」就能改写供应商地址
+        // （截获后续全部对话与密钥）或注入提示词，密码/TOTP 保护就形同虚设。
+        bool touchesSensitiveSettings =
+            action is "add_provider" or "set_provider" or "delete_provider" ||
+            args["customPrompt"] != null ||
+            args["customMemory"] != null ||
+            args["isCommandExecutionEnabled"] != null;
+        if (touchesSensitiveSettings && !IsAuthorizedSession)
+        {
+            return new ToolExecutionResult
+            {
+                ToolCallId = toolId,
+                Name = "update_plugin_settings",
+                Success = false,
+                Result = "当前已启用密码/TOTP 访问保护：供应商增删改、自定义提示词、长期记忆与命令行权限属于敏感设置，不能通过对话修改。请提示用户前往【设置 -> IslandAgent设置】手动操作。"
+            };
+        }
 
         // ---------- 供应商增删改 ----------
         switch (action)

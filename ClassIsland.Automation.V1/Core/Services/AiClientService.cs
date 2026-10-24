@@ -117,15 +117,34 @@ public class AiClientService
         JsonArray conversationMessages,
         ToolExecutor? executor,
         Action<string, ToolExecutionResult?>? onProgress = null,
+        Action? onFirstResponse = null,
         CancellationToken cancellationToken = default)
     {
         var baseUrl = settings.CurrentBaseUrl.TrimEnd('/');
-        var chatUrl = baseUrl.EndsWith("/chat/completions") ? baseUrl : $"{baseUrl}/chat/completions";
+
+        // 部分用户只填官方根地址（如 https://api.openai.com，未带 /v1）：
+        // 拉取模型时有 /v1 兜底所以能成功，聊天却会 404。
+        // 这里同样准备候选地址，首个 404 时自动切换下一个重试。
+        var chatUrlCandidates = new List<string>();
+        if (baseUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+        {
+            chatUrlCandidates.Add(baseUrl);
+        }
+        else
+        {
+            chatUrlCandidates.Add($"{baseUrl}/chat/completions");
+            if (!baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+            {
+                chatUrlCandidates.Add($"{baseUrl}/v1/chat/completions");
+            }
+        }
+        var chatUrlIndex = 0;
 
         var agentResponse = new AgentChatResponse();
 
         int iterations = 0;
         var maxIterations = settings.EffectiveMaxToolIterations;
+        var firstResponseNotified = false;
 
         while (iterations < maxIterations)
         {
@@ -141,7 +160,7 @@ public class AiClientService
                 ["temperature"] = 0.2
             };
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, chatUrl)
+            using var request = new HttpRequestMessage(HttpMethod.Post, chatUrlCandidates[chatUrlIndex])
             {
                 Content = new StringContent(requestPayload.ToJsonString(), Encoding.UTF8, "application/json")
             };
@@ -157,6 +176,13 @@ public class AiClientService
             var rawResponse = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                // 根地址少写了 /v1 时首个候选会 404，切换到下一个候选重发本轮。
+                if (response.StatusCode == HttpStatusCode.NotFound && chatUrlIndex + 1 < chatUrlCandidates.Count)
+                {
+                    chatUrlIndex++;
+                    iterations--;
+                    continue;
+                }
                 throw new HttpRequestException($"AI 接口请求失败 ({response.StatusCode}): {rawResponse}");
             }
 
@@ -181,26 +207,36 @@ public class AiClientService
                 ? cElem.GetString() ?? ""
                 : "";
 
+            // 模型已在首轮响应中取到本轮上传的图片等内容，通知调用方
+            // （例如把历史里的 Base64 图片换成占位文本，避免后续 ReAct 轮次重复上传）。
+            if (!firstResponseNotified)
+            {
+                firstResponseNotified = true;
+                onFirstResponse?.Invoke();
+            }
+
             // 1. 优先检查原生 tool_calls
             if (message.TryGetProperty("tool_calls", out var toolCallsElem) &&
                 toolCallsElem.ValueKind == JsonValueKind.Array &&
                 toolCallsElem.GetArrayLength() > 0)
             {
-                var assistantMsg = new JsonObject
-                {
-                    ["role"] = "assistant",
-                    ["content"] = textContent,
-                    ["tool_calls"] = JsonNode.Parse(toolCallsElem.GetRawText())
-                };
-                conversationMessages.Add(assistantMsg);
-
+                // 先解析出结构完整的调用，再据此重建 assistant 消息里的 tool_calls。
+                // OpenAI 协议要求 assistant.tool_calls 的每一项都有对应的 role=tool 应答；
+                // 若原样透传又跳过残缺项，下一轮请求会被严格校验的端点以 400 拒绝。
+                var validCalls = new List<(string Id, string Name, JsonObject Args, JsonObject Clone)>();
                 foreach (var tc in toolCallsElem.EnumerateArray())
                 {
-                    // 部分模型/网关会返回结构不完整的 tool_call，跳过而不是让整轮对话崩溃
                     if (tc.ValueKind != JsonValueKind.Object ||
                         !tc.TryGetProperty("function", out var fn) ||
                         fn.ValueKind != JsonValueKind.Object ||
-                        !fn.TryGetProperty("name", out var nameElem))
+                        !fn.TryGetProperty("name", out var nameElem) ||
+                        nameElem.ValueKind != JsonValueKind.String)
+                    {
+                        continue;
+                    }
+
+                    var name = nameElem.GetString() ?? "";
+                    if (string.IsNullOrWhiteSpace(name))
                     {
                         continue;
                     }
@@ -208,11 +244,6 @@ public class AiClientService
                     var id = tc.TryGetProperty("id", out var idElem) && idElem.ValueKind == JsonValueKind.String
                         ? idElem.GetString() ?? Guid.NewGuid().ToString()
                         : Guid.NewGuid().ToString();
-                    var name = nameElem.GetString() ?? "";
-                    if (string.IsNullOrWhiteSpace(name))
-                    {
-                        continue;
-                    }
 
                     var argsStr = fn.TryGetProperty("arguments", out var argsElem)
                         ? (argsElem.ValueKind == JsonValueKind.String
@@ -230,44 +261,83 @@ public class AiClientService
                         argsObj = new JsonObject();
                     }
 
-                    var callInfo = new ToolCallInfo
+                    // 克隆原始节点并补齐缺失字段，保证 assistant 消息与 tool 应答一一对应
+                    if (JsonNode.Parse(tc.GetRawText()) is not JsonObject clone)
                     {
-                        Id = id,
-                        Name = name,
-                        Arguments = argsObj
-                    };
-                    agentResponse.ToolCalls.Add(callInfo);
-
-                    ToolExecutionResult execResult;
-                    if (executor != null)
-                    {
-                        execResult = executor.Execute(callInfo);
+                        continue;
                     }
-                    else
+                    if (clone["id"] == null) clone["id"] = id;
+                    if (clone["type"] == null) clone["type"] = "function";
+                    if (clone["function"] is JsonObject cloneFn && cloneFn["arguments"] == null)
                     {
-                        execResult = new ToolExecutionResult
-                        {
-                            ToolCallId = id,
-                            Name = name,
-                            Success = false,
-                            Result = "本地工具执行器未注入"
-                        };
+                        cloneFn["arguments"] = "{}";
                     }
-                    agentResponse.ExecutedResults.Add(execResult);
 
-                    onProgress?.Invoke($"[工具调用: {name}] {(execResult.Success ? "成功" : "失败")}", execResult);
-
-                    // 送回历史供下一轮推理
-                    conversationMessages.Add(new JsonObject
-                    {
-                        ["role"] = "tool",
-                        ["tool_call_id"] = id,
-                        ["content"] = execResult.Result
-                    });
+                    validCalls.Add((id, name, argsObj, clone));
                 }
 
-                // 继续自动执行下一轮推理
-                continue;
+                if (validCalls.Count > 0)
+                {
+                    var assistantToolCalls = new JsonArray();
+                    foreach (var (_, _, _, clone) in validCalls)
+                    {
+                        assistantToolCalls.Add(clone);
+                    }
+
+                    conversationMessages.Add(new JsonObject
+                    {
+                        ["role"] = "assistant",
+                        ["content"] = textContent,
+                        ["tool_calls"] = assistantToolCalls
+                    });
+
+                    foreach (var (id, name, argsObj, _) in validCalls)
+                    {
+                        var callInfo = new ToolCallInfo
+                        {
+                            Id = id,
+                            Name = name,
+                            Arguments = argsObj
+                        };
+                        agentResponse.ToolCalls.Add(callInfo);
+
+                        ToolExecutionResult execResult;
+                        if (executor != null)
+                        {
+                            // execute_command 内部同步等待进程退出（最长 60 秒），
+                            // 必须移出 UI 线程，否则整个界面会「未响应」。
+                            execResult = name == "execute_command"
+                                ? await Task.Run(() => executor.Execute(callInfo))
+                                : executor.Execute(callInfo);
+                        }
+                        else
+                        {
+                            execResult = new ToolExecutionResult
+                            {
+                                ToolCallId = id,
+                                Name = name,
+                                Success = false,
+                                Result = "本地工具执行器未注入"
+                            };
+                        }
+                        agentResponse.ExecutedResults.Add(execResult);
+
+                        onProgress?.Invoke($"[工具调用: {name}] {(execResult.Success ? "成功" : "失败")}", execResult);
+
+                        // 送回历史供下一轮推理
+                        conversationMessages.Add(new JsonObject
+                        {
+                            ["role"] = "tool",
+                            ["tool_call_id"] = id,
+                            ["content"] = execResult.Result
+                        });
+                    }
+
+                    // 继续自动执行下一轮推理
+                    continue;
+                }
+
+                // 整批 tool_calls 都残缺：按无有效调用处理，落入下方 DSML / 最终回复分支
             }
 
             // 2. 兜底检查：模型是否在 content 中直接输出了 DSML / XML 格式的调用

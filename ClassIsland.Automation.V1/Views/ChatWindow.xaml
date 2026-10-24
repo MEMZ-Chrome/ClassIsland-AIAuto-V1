@@ -29,6 +29,8 @@
 
             <!-- 对话界面模型快速切换下拉框 -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Name="NewSessionButton" Content="新建会话" FontSize="12" Margin="0,0,12,0"
+                        VerticalAlignment="Center" Padding="12,2"/>
                 <TextBlock Text="当前模型:" VerticalAlignment="Center" FontSize="12"
                            Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Margin="0,0,6,0"/>
                 <ComboBox Name="ModelSelectComboBox" MinWidth="180" MaxWidth="260" VerticalAlignment="Center" Height="28"/>

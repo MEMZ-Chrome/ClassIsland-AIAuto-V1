@@ -289,27 +289,23 @@ public static class AiToolDefinitions
                             ["customSettings"] = new JsonObject
                             {
                                 ["type"] = "object",
-                                ["description"] = "其他支持的设置项键值对（键名需在白名单内，如 showWeekDay、isMainWindowTopmost、isAutoStartupEnabled）"
+                                ["description"] = "其他支持的设置项键值对（键名需在白名单内，如 hideOnClass、isExactTimeEnabled、selectedProfile）"
                             },
                             ["timeOffset"] = new JsonObject
                             {
                                 ["type"] = "number",
                                 ["description"] = "timeOffsetSeconds 的别名"
                             },
+                            // 注意：只能暴露 1.x 宿主 Settings 中真实存在、且已收录进
+                            // ToolExecutor.AppSettingPropertyNames 白名单的设置项。
+                            // 此前这里曾暴露 showWeekDay、showSecond、isMainWindowTopmost、
+                            // isMousePenetrationEnabled、isAutoStartupEnabled 等宿主根本不存在
+                            // 的项——模型调用后被白名单静默忽略，却向用户谎报修改成功。
                             ["showDate"] = new JsonObject { ["type"] = "boolean", ["description"] = "主界面是否显示日期" },
-                            ["showWeekDay"] = new JsonObject { ["type"] = "boolean", ["description"] = "主界面是否显示星期" },
-                            ["showSecond"] = new JsonObject { ["type"] = "boolean", ["description"] = "时钟是否显示秒" },
                             ["isMainWindowVisible"] = new JsonObject { ["type"] = "boolean", ["description"] = "主窗口是否显示" },
-                            ["isMainWindowTopmost"] = new JsonObject { ["type"] = "boolean", ["description"] = "主窗口是否置顶" },
-                            ["isMousePenetrationEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启鼠标穿透" },
                             ["hideOnMaxWindow"] = new JsonObject { ["type"] = "boolean", ["description"] = "窗口最大化时是否自动隐藏" },
                             ["isTimeAutoAdjustEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启网络时间自动校准" },
                             ["isClassChangingNotificationEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启下课/换课提醒" },
-                            ["isWeatherNotificationEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启天气提醒" },
-                            ["isAfterClassNotificationEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启放学提醒" },
-                            ["isAutoStartupEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开机自启动" },
-                            ["isStartupUpdateCheckEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否在启动时检查更新" },
-                            ["isSleepModeEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启休眠模式（关闭全部提醒）" },
                             ["isDebugEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启调试模式" },
                             ["selectedProfile"] = new JsonObject { ["type"] = "string", ["description"] = "当前启用的档案名称" }
                         },
@@ -342,7 +338,7 @@ public static class AiToolDefinitions
                 ["function"] = new JsonObject
                 {
                     ["name"] = "update_plugin_settings",
-                    ["description"] = "修改 IslandAgent 插件自身的设置并立即保存生效。可新增/修改/删除 AI 供应商，增删与启停模型，切换当前使用的模型，开关长期记忆与命令行权限，改写自定义提示词与长期记忆内容。当用户说“添加一个 xxx 供应商”“把模型换成 xxx”“关掉记忆”“记住我的提示词”时调用。",
+                    ["description"] = "修改 IslandAgent 插件自身的设置并立即保存生效。可新增/修改/删除 AI 供应商，增删与启停模型，切换当前使用的模型，开关长期记忆与命令行权限，改写自定义提示词与长期记忆内容。当用户说“添加一个 xxx 供应商”“把模型换成 xxx”“关掉记忆”“记住我的提示词”时调用。注意：若用户启用了密码/TOTP 访问保护，供应商增删改、自定义提示词、长期记忆与命令行权限属于敏感设置，会被拒绝执行，应提示用户前往【设置 -> IslandAgent设置】手动操作。",
                     ["parameters"] = new JsonObject
                     {
                         ["type"] = "object",
