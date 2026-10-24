@@ -416,6 +416,91 @@ public class AiClientService
         return agentResponse;
     }
 
+    /// <summary>
+    /// 用当前模型为会话生成一个简短标题。单次对话补全请求，不挂工具。
+    /// 返回 null 表示生成失败（网络/鉴权/空回复），调用方保持原标题即可。
+    /// </summary>
+    public async Task<string?> GenerateSessionTitleAsync(PluginSettings settings, string conversationExcerpt, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var baseUrl = settings.CurrentBaseUrl.TrimEnd('/');
+            var candidates = new List<string>();
+            if (baseUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            {
+                candidates.Add(baseUrl);
+            }
+            else
+            {
+                candidates.Add($"{baseUrl}/chat/completions");
+                if (!baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+                {
+                    candidates.Add($"{baseUrl}/v1/chat/completions");
+                }
+            }
+
+            foreach (var url in candidates)
+            {
+                var payload = new JsonObject
+                {
+                    ["model"] = settings.CurrentModel,
+                    ["messages"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["role"] = "user",
+                            ["content"] = "请为下面这段对话起一个不超过10个字的中文标题，直接输出标题本身，不要引号、序号、标点或任何解释：\n" + conversationExcerpt
+                        }
+                    },
+                    ["temperature"] = 0.2,
+                    ["max_tokens"] = 64,
+                    ["stream"] = false
+                };
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
+                };
+                request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://github.com/MEMZ-Chrome/ClassIsland-AIAuto");
+                request.Headers.TryAddWithoutValidation("X-Title", "ClassIsland IslandAgent");
+                if (!string.IsNullOrWhiteSpace(settings.CurrentApiKey))
+                {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.CurrentApiKey.Trim());
+                }
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound) continue;
+                if (!response.IsSuccessStatusCode) return null;
+
+                using var doc = JsonDocument.Parse(raw);
+                if (!doc.RootElement.TryGetProperty("choices", out var choices)
+                    || choices.ValueKind != JsonValueKind.Array
+                    || choices.GetArrayLength() == 0)
+                {
+                    return null;
+                }
+
+                var text = choices[0].TryGetProperty("message", out var msg)
+                           && msg.TryGetProperty("content", out var c)
+                           && c.ValueKind == JsonValueKind.String
+                    ? c.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(text)) return null;
+
+                text = text.Split('\n')[0].Trim().Trim('"', '“', '”', '\'', '‘', '’', '#', '。', '.', '！', '!', '？', '?', '，', ',');
+                if (string.IsNullOrWhiteSpace(text)) return null;
+                return text.Length <= 16 ? text : text[..16];
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string Truncate(string text, int maxLength)
     {
         if (string.IsNullOrEmpty(text)) return "";

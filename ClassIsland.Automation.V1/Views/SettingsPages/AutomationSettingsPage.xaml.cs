@@ -105,6 +105,9 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 _settings.IsNewSessionOnOpenEnabled = updated.IsNewSessionOnOpenEnabled;
                 if (NewSessionOnOpenCheckBox != null) NewSessionOnOpenCheckBox.IsChecked = updated.IsNewSessionOnOpenEnabled;
 
+                _settings.IsAiSessionTitleEnabled = updated.IsAiSessionTitleEnabled;
+                if (AiSessionTitleCheckBox != null) AiSessionTitleCheckBox.IsChecked = updated.IsAiSessionTitleEnabled;
+
                 _settings.MaxToolIterations = updated.MaxToolIterations;
                 if (MaxToolIterationsTextBox != null) MaxToolIterationsTextBox.Text = updated.EffectiveMaxToolIterations.ToString();
             }
@@ -278,6 +281,12 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             NewSessionOnOpenCheckBox.IsChecked = _settings.IsNewSessionOnOpenEnabled;
             NewSessionOnOpenCheckBox.Click += (_, _) => AutoSave();
+        }
+
+        if (AiSessionTitleCheckBox != null)
+        {
+            AiSessionTitleCheckBox.IsChecked = _settings.IsAiSessionTitleEnabled;
+            AiSessionTitleCheckBox.Click += (_, _) => AutoSave();
         }
 
         if (MaxToolIterationsTextBox != null)
@@ -764,6 +773,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
         _settings.IsCommandExecutionEnabled = IsCommandExecutionEnabledCheckBox?.IsChecked ?? false;
         _settings.IsMultiSessionEnabled = IsMultiSessionEnabledCheckBox?.IsChecked ?? true;
         _settings.IsNewSessionOnOpenEnabled = NewSessionOnOpenCheckBox?.IsChecked ?? false;
+        _settings.IsAiSessionTitleEnabled = AiSessionTitleCheckBox?.IsChecked ?? false;
 
         // 填了非法内容就退回默认值，不把 0 或负数带进对话循环。
         _settings.MaxToolIterations = int.TryParse(MaxToolIterationsTextBox?.Text?.Trim(), out var parsedIterations)

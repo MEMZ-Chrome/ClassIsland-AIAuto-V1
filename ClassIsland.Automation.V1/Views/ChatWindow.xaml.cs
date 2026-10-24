@@ -345,8 +345,13 @@ public partial class ChatWindow : Window
             }
         }
         current.LastActiveAt = DateTime.Now;
-        var title = DeriveSessionTitle(current);
-        if (!string.IsNullOrWhiteSpace(title)) current.Title = title;
+        // 已有标题（含 AI 生成的）不覆盖；AI 命名模式下也不用首条消息截取兜底，
+        // 否则会抢在 AI 返回前把标题定死，导致 AI 命名永远不触发
+        if (current.Title == "新会话" && !_settings.IsAiSessionTitleEnabled)
+        {
+            var title = DeriveSessionTitle(current);
+            if (!string.IsNullOrWhiteSpace(title)) current.Title = title;
+        }
     }
 
     private void PersistSessions()
@@ -443,6 +448,57 @@ public partial class ChatWindow : Window
         }
         return "新会话";
     }
+
+    /// <summary>调用当前模型为本会话生成总结标题；期间会话被删除则放弃写入。</summary>
+    private async Task UpdateSessionTitleWithAiAsync(ChatSession session)
+    {
+        try
+        {
+            var excerpt = BuildTitleExcerpt();
+            if (string.IsNullOrWhiteSpace(excerpt)) return;
+
+            var title = await _aiClient.GenerateSessionTitleAsync(_settings, excerpt);
+            if (string.IsNullOrWhiteSpace(title)) return;
+            if (!_sessions.Contains(session)) return;
+
+            session.Title = title;
+            PersistSessions();
+            RenderSessionList();
+        }
+        catch
+        {
+            // 标题生成失败不影响对话
+        }
+    }
+
+    /// <summary>取首条用户消息与最终回复各 200 字作为命名素材。</summary>
+    private string BuildTitleExcerpt()
+    {
+        string? firstUser = null;
+        string? lastAssistant = null;
+        foreach (var node in _conversationMessages)
+        {
+            if (node is not JsonObject o) continue;
+            switch (o["role"]?.GetValue<string>())
+            {
+                case "user" when firstUser == null:
+                    firstUser = NormalizeContentToString(o["content"]);
+                    break;
+                case "assistant":
+                    var a = NormalizeContentToString(o["content"]);
+                    if (!string.IsNullOrWhiteSpace(a)) lastAssistant = a;
+                    break;
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        if (!string.IsNullOrWhiteSpace(firstUser)) sb.AppendLine("用户：" + TruncateText(firstUser, 200));
+        if (!string.IsNullOrWhiteSpace(lastAssistant)) sb.Append("助手：" + TruncateText(lastAssistant, 200));
+        return sb.ToString().Trim();
+    }
+
+    private static string TruncateText(string text, int maxLength)
+        => text.Length <= maxLength ? text : text[..maxLength] + "…";
 
     private void RenderSessionList()
     {
@@ -762,6 +818,17 @@ public partial class ChatWindow : Window
             assistantMsg.IsThinking = false;
             assistantMsg.Content = string.IsNullOrWhiteSpace(response.ReplyText) ? "操作已执行完毕。" : response.ReplyText;
             ScrollToBottom();
+
+            // AI 总结标题：仅在会话还没有标题（新会话首轮完成）时触发一次，
+            // 失败静默保留默认标题，下一轮还会再试
+            if (_settings.IsAiSessionTitleEnabled)
+            {
+                var titleSession = _sessions.FirstOrDefault(s => s.Id == _activeSessionId);
+                if (titleSession != null && titleSession.Title == "新会话")
+                {
+                    _ = UpdateSessionTitleWithAiAsync(titleSession);
+                }
+            }
         }
         catch (Exception ex)
         {

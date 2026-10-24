@@ -113,6 +113,8 @@ public class PluginSettings
     public bool IsMultiSessionEnabled { get; set; } = true;
     /// <summary>每次打开对话窗口时直接新建会话；关闭则继续上一次会话。</summary>
     public bool IsNewSessionOnOpenEnabled { get; set; } = false;
+    /// <summary>会话标题由 AI 总结生成（每会话首次对话后自动命名，额外消耗少量 token）。</summary>
+    public bool IsAiSessionTitleEnabled { get; set; } = false;
 
     // 长期记忆系统
     public string CustomMemory { get; set; } = "";
