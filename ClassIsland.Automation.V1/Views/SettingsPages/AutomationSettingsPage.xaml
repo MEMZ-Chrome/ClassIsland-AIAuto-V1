@@ -7,6 +7,34 @@
                      mc:Ignorable="d"
                      TextElement.Foreground="{DynamicResource MaterialDesignBody}"
                      Background="{DynamicResource MaterialDesignPaper}">
+    <ci:SettingsPageBase.Resources>
+        <!-- 预置模板胶囊：自绘模板是为了不继承 MaterialDesign 的按钮内边距与阴影 -->
+        <Style x:Key="PresetChipButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ChipBorder" CornerRadius="12" Padding="11,5"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChipBorder" Property="BorderBrush"
+                                        Value="{DynamicResource MaterialDesignBody}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </ci:SettingsPageBase.Resources>
     <Grid>
         <!-- 密码/TOTP 访问锁定遮罩层 -->
         <Border Name="LockOverlayBorder" Visibility="Collapsed"
@@ -234,92 +262,114 @@
         </ScrollViewer>
 
         <!-- 供应商 添加/编辑 模态弹窗遮罩层 -->
-        <Grid Name="ProviderDialogOverlay" Visibility="Collapsed" Background="#80000000">
-            <Border Background="{DynamicResource MaterialDesignCardBackground}"
-                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                    BorderThickness="1" CornerRadius="12" Padding="24"
-                    Width="480" MaxHeight="620"
+        <Grid Name="ProviderDialogOverlay" Visibility="Collapsed" Background="#8C000000">
+            <Border Width="520" MaxHeight="660" CornerRadius="16"
+                    Background="{DynamicResource MaterialDesignCardBackground}"
                     VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="4" Direction="270" Opacity="0.22" Color="Black"/>
+                </Border.Effect>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- 弹窗标题与关闭 -->
-                    <Grid Margin="0,0,0,16">
+                    <!-- 标题区：标题 + 一句话说明，右上角关闭 -->
+                    <Grid Grid.Row="0" Margin="22,18,14,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Name="DialogTitleTextBlock" Text="添加供应商" FontSize="18" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <Button Name="DialogCloseButton" Grid.Column="1" Content="关闭" Padding="8,4"
-                                VerticalAlignment="Center"/>
+                        <StackPanel>
+                            <TextBlock Name="DialogTitleTextBlock" Text="添加供应商" FontSize="17" FontWeight="SemiBold"/>
+                            <TextBlock Name="DialogSubtitleTextBlock" Margin="0,3,0,0" FontSize="12" Opacity="0.55"
+                                       TextWrapping="Wrap"
+                                       Text="填好别名、地址和密钥就能用。预置模板只填地址，密钥要自己填。"/>
+                        </StackPanel>
+                        <Button Name="DialogCloseButton" Grid.Column="1" Width="28" Height="28" Padding="0"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                VerticalAlignment="Top" ToolTip="关闭">
+                            <Path Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                                  Width="10" Height="10" Stretch="Uniform"
+                                  Fill="{DynamicResource MaterialDesignBody}" Opacity="0.6"/>
+                        </Button>
                     </Grid>
 
-                    <!-- 弹窗表单滚动内容 -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <!-- 预置快捷填入 -->
-                            <TextBlock Text="预置模板" FontSize="12" Margin="0,0,0,6"
-                                       Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7"/>
-                            <WrapPanel Name="PresetButtonsWrapPanel" Margin="0,0,0,14"/>
+                    <Border Grid.Row="1" Height="1" Opacity="0.7"
+                            Background="{DynamicResource MaterialDesignDivider}"/>
 
-                            <!-- 供应商别名 -->
-                            <TextBlock Text="供应商别名" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                            <TextBox Name="DialogNameTextBox" Margin="0,0,0,14"/>
+                    <!-- 表单区 -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="22,16,22,8">
+                            <TextBlock Text="快速填充" FontSize="11" Opacity="0.55" Margin="0,0,0,6"/>
+                            <WrapPanel Name="PresetButtonsWrapPanel" Margin="0,2,0,14"/>
 
-                            <!-- API 地址 -->
-                            <TextBlock Text="API 地址" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                            <TextBox Name="DialogBaseUrlTextBox" Margin="0,0,0,14"/>
+                            <TextBlock Text="供应商别名" FontSize="11" Opacity="0.55" Margin="0,0,0,5"/>
+                            <TextBox Name="DialogNameTextBox" MinHeight="34" Padding="10,6" Margin="0,0,0,14"/>
 
-                            <!-- API 密钥 -->
-                            <TextBlock Text="API 密钥" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                            <PasswordBox Name="DialogApiKeyPasswordBox" Margin="0,0,0,14"/>
+                            <TextBlock Text="API 地址" FontSize="11" Opacity="0.55" Margin="0,0,0,5"/>
+                            <TextBox Name="DialogBaseUrlTextBox" MinHeight="34" Padding="10,6"/>
+                            <TextBlock Text="可以不写 /v1，请求失败时会自动补上再试一次。" FontSize="11"
+                                       Opacity="0.45" Margin="2,4,0,14" TextWrapping="Wrap"/>
 
-                            <!-- 模型管理 -->
-                            <Border Background="{DynamicResource MaterialDesignBackground}"
-                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                    BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,14">
-                                <StackPanel>
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="模型列表" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                        <Button Name="DialogFetchModelsButton" Grid.Column="1" Content="自动获取" Padding="10,4"/>
-                                    </Grid>
+                            <TextBlock Text="API 密钥" FontSize="11" Opacity="0.55" Margin="0,0,0,5"/>
+                            <PasswordBox Name="DialogApiKeyPasswordBox" MinHeight="34" Padding="10,6" Margin="0,0,0,16"/>
 
-                                    <!-- 手动添加模型 -->
-                                    <Grid Margin="0,0,0,10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Name="DialogNewModelTextBox" Margin="0,0,8,0"/>
-                                        <Button Name="DialogAddModelButton" Grid.Column="1" Content="添加" Padding="12,4"/>
-                                    </Grid>
+                            <!-- 模型：标题行 + 手动添加行 + 列表，列表不再套第二层边框 -->
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="模型" FontSize="11" Opacity="0.55" VerticalAlignment="Center"/>
+                                <Button Name="DialogFetchModelsButton" Grid.Column="1" Content="从接口获取"
+                                        Style="{DynamicResource MaterialDesignFlatButton}" FontSize="12"
+                                        Padding="10,3" MinWidth="0"/>
+                            </Grid>
 
-                                    <!-- 弹窗中的模型列表展示 -->
-                                    <Border Background="{DynamicResource MaterialDesignCardBackground}"
-                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                            BorderThickness="1" CornerRadius="6" Padding="6" MaxHeight="160">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                            <StackPanel Name="DialogModelsContainer"/>
-                                        </ScrollViewer>
-                                    </Border>
-                                </StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Name="DialogNewModelTextBox" MinHeight="32" Padding="10,4" Margin="0,0,8,0"/>
+                                <Button Name="DialogAddModelButton" Grid.Column="1" Content="添加"
+                                        Style="{DynamicResource MaterialDesignFlatButton}" FontSize="12" Padding="12,3"/>
+                            </Grid>
+
+                            <Border MaxHeight="150" CornerRadius="8" Padding="4,2"
+                                    Background="{DynamicResource MaterialDesignBackground}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Name="DialogModelsContainer" Margin="4,2"/>
+                                </ScrollViewer>
                             </Border>
-
-                            <!-- 底部保存/取消按钮 -->
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
-                                <Button Name="DialogCancelButton" Content="取消" Padding="16,6" Margin="0,0,10,0"/>
-                                <Button Name="DialogSaveButton" Content="保存" Padding="20,6"/>
-                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
+
+                    <!-- 底部操作区：错误提示在左，按钮固定在右下角，不随内容滚动 -->
+                    <Border Grid.Row="3" BorderThickness="0,1,0,0" Padding="22,12,20,14"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Name="DialogErrorTextBlock" Visibility="Collapsed"
+                                       FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Margin="0,0,12,0"
+                                       Foreground="{DynamicResource MaterialDesignValidationErrorBrush}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Name="DialogCancelButton" Content="取消" FontSize="12.5"
+                                        Style="{DynamicResource MaterialDesignFlatButton}"
+                                        Padding="14,5" Margin="0,0,8,0"/>
+                                <Button Name="DialogSaveButton" Content="保存" FontSize="12.5"
+                                        Padding="20,5" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>

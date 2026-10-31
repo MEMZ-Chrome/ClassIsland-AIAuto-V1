@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Shapes = System.Windows.Shapes;
 using ClassIsland.Automation.Core.Models;
 using ClassIsland.Automation.Core.Services;
 using ClassIsland.Core.Abstractions.Controls;
@@ -356,13 +357,19 @@ public partial class AutomationSettingsPage : SettingsPageBase
             var btn = new Button
             {
                 Content = p.Name,
-                Padding = new Thickness(8, 3, 8, 3),
-                Margin = new Thickness(0, 0, 6, 6),
-                FontSize = 11
+                Style = (Style)FindResource("PresetChipButton")
             };
             btn.Click += (_, _) => ApplyPreset(p.Name, p.Url);
             PresetButtonsWrapPanel.Children.Add(btn);
         }
+    }
+
+    /// <summary>弹窗内的行内提示：校验不过时贴在底部左侧，不再弹浮层 Toast。</summary>
+    private void ShowProviderDialogError(string message)
+    {
+        if (DialogErrorTextBlock == null) return;
+        DialogErrorTextBlock.Text = message;
+        DialogErrorTextBlock.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void ApplyPreset(string name, string baseUrl)
@@ -574,6 +581,11 @@ public partial class AutomationSettingsPage : SettingsPageBase
         _dialogModels = new List<AiModelItem>();
 
         if (DialogTitleTextBlock != null) DialogTitleTextBlock.Text = "添加供应商";
+        if (DialogSubtitleTextBlock != null)
+        {
+            DialogSubtitleTextBlock.Text = "填好别名、地址和密钥就能用。预置模板只填地址，密钥要自己填。";
+        }
+        ShowProviderDialogError("");
         if (DialogNameTextBox != null) DialogNameTextBox.Text = "";
         if (DialogBaseUrlTextBox != null) DialogBaseUrlTextBox.Text = "";
         if (DialogApiKeyPasswordBox != null) DialogApiKeyPasswordBox.Password = "";
@@ -588,7 +600,12 @@ public partial class AutomationSettingsPage : SettingsPageBase
         _dialogEditingProvider = provider;
         _dialogModels = provider.Models.Select(m => new AiModelItem(m.Name, m.IsEnabled)).ToList();
 
-        if (DialogTitleTextBlock != null) DialogTitleTextBlock.Text = $"编辑供应商 - {provider.Name}";
+        if (DialogTitleTextBlock != null) DialogTitleTextBlock.Text = "编辑供应商";
+        if (DialogSubtitleTextBlock != null)
+        {
+            DialogSubtitleTextBlock.Text = $"正在修改「{provider.Name}」，保存后立即生效。";
+        }
+        ShowProviderDialogError("");
         if (DialogNameTextBox != null) DialogNameTextBox.Text = provider.Name;
         if (DialogBaseUrlTextBox != null) DialogBaseUrlTextBox.Text = provider.BaseUrl;
         if (DialogApiKeyPasswordBox != null) DialogApiKeyPasswordBox.Password = provider.ApiKey;
@@ -607,10 +624,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             var hint = new TextBlock
             {
-                Text = "暂无模型",
-                Opacity = 0.7,
-                FontSize = 12,
-                Margin = new Thickness(4, 4, 4, 4)
+                Text = "还没有模型，点「从接口获取」或手动输入",
+                Opacity = 0.45,
+                FontSize = 11.5,
+                Margin = new Thickness(4, 8, 4, 8)
             };
             BindThemeBrush(hint, TextBlock.ForegroundProperty, "MaterialDesignBody");
             DialogModelsContainer.Children.Add(hint);
@@ -621,7 +638,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             var rowGrid = new Grid
             {
-                Margin = new Thickness(0, 2, 0, 2)
+                Margin = new Thickness(0, 1, 0, 1),
+                MinHeight = 26
             };
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -630,6 +648,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
             {
                 Content = model.Name,
                 IsChecked = model.IsEnabled,
+                FontSize = 12.5,
                 VerticalAlignment = VerticalAlignment.Center
             };
             checkBox.Click += (_, _) =>
@@ -637,12 +656,33 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 model.IsEnabled = checkBox.IsChecked == true;
             };
 
-            var delBtn = new Button
+            // 删除改成图标按钮，和会话列表里的删除保持同一套视觉
+            var closeIcon = new Shapes.Path
             {
-                Content = "删除",
-                Padding = new Thickness(8, 2, 8, 2),
+                Data = Geometry.Parse("M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"),
+                Width = 8,
+                Height = 8,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            BindThemeBrush(closeIcon, Shapes.Shape.FillProperty, "MaterialDesignBody");
+
+            var delBtn = new Button
+            {
+                Content = closeIcon,
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand,
+                Opacity = 0.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "移除这个模型"
+            };
+            delBtn.MouseEnter += (_, _) => delBtn.Opacity = 0.9;
+            delBtn.MouseLeave += (_, _) => delBtn.Opacity = 0.5;
             delBtn.Click += (_, _) =>
             {
                 _dialogModels.Remove(model);
@@ -682,7 +722,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            ShowToast("请先填写 API 地址 (Base URL)！", isError: true);
+            ShowProviderDialogError("先填 API 地址，才能从接口拉模型。");
             return;
         }
 
@@ -712,7 +752,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
         }
         catch (Exception ex)
         {
-            ShowToast($"获取模型失败: {ex.Message}", isError: true);
+            ShowProviderDialogError($"获取模型失败：{ex.Message}");
         }
     }
 
@@ -724,12 +764,12 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            ShowToast("请输入供应商别名！", isError: true);
+            ShowProviderDialogError("请填写供应商别名。");
             return;
         }
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            ShowToast("请输入 API 地址 (Base URL)！", isError: true);
+            ShowProviderDialogError("请填写 API 地址，例如 https://api.deepseek.com。");
             return;
         }
 
@@ -740,7 +780,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
                                            && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (duplicateName)
         {
-            ShowToast($"已存在名为「{name}」的供应商，请换一个别名！", isError: true);
+            ShowProviderDialogError($"已存在名为「{name}」的供应商，换个别名。");
             return;
         }
 
@@ -779,6 +819,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
     private void CloseProviderDialog()
     {
+        ShowProviderDialogError("");
         if (ProviderDialogOverlay != null)
         {
             ProviderDialogOverlay.Visibility = Visibility.Collapsed;
