@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:ClassIsland.Automation.Core.Models"
         xmlns:mdXaml="clr-namespace:MdXaml;assembly=MdXaml"
-        Title="IslandAgent" Width="640" Height="720"
+        Title="IslandAgent" Width="680" Height="720"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}">
@@ -12,7 +12,7 @@
              深浅主题切换时背景会自动跟随；选中项由代码覆盖为本地值，优先级高于触发器。 -->
         <Style x:Key="SessionItemBorderStyle" TargetType="Border">
             <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="6,5,4,5"/>
+            <Setter Property="Padding" Value="7,0,5,0"/>
             <Setter Property="Margin" Value="0,1"/>
             <Setter Property="Background" Value="Transparent"/>
             <Style.Triggers>
@@ -30,38 +30,39 @@
         </Grid.ColumnDefinitions>
 
         <!-- 会话列表侧栏（仅多会话模式显示，可折叠） -->
-        <Border Name="SessionSidebarBorder" Width="204" Margin="0,0,12,0" Visibility="Collapsed"
-                BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="1"
-                CornerRadius="10" Background="{DynamicResource MaterialDesignBackground}" Padding="10,10,10,6">
+        <Border Name="SessionSidebarBorder" Width="200" Margin="0,0,10,0" Visibility="Collapsed"
+                CornerRadius="12" Background="{DynamicResource MaterialDesignCardBackground}" Padding="8,10,8,8">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- 头部：气泡图标 + 标题 + 会话数徽标 + 新建按钮 -->
-                <Grid Margin="2,0,0,8">
+                <!-- 头部：小标题 + 计数，右侧两枚无边框图标按钮（新建 / 收起） -->
+                <Grid Margin="6,0,0,6">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Path Data="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"
-                          Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center"
-                          Fill="{DynamicResource MaterialDesignBody}" Opacity="0.65"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="7,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="会话" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <Border Name="SessionCountBadge" Margin="6,0,0,0" Padding="5,0" CornerRadius="7"
-                                Background="{DynamicResource MaterialDesignDivider}" VerticalAlignment="Center">
-                            <TextBlock Name="SessionCountText" Text="0" FontSize="10" FontWeight="SemiBold"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="会话" FontSize="11" FontWeight="SemiBold" Opacity="0.5"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Name="SessionCountText" Text="0" FontSize="11" Opacity="0.3"
+                                   Margin="6,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Button Name="SidebarNewSessionButton" Grid.Column="2" Width="26" Height="26" Padding="0"
-                            ToolTip="新建会话" VerticalAlignment="Center">
+                    <Button Name="SidebarNewSessionButton" Grid.Column="1" Width="24" Height="24" Padding="0"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand" ToolTip="新建会话">
                         <Path Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
-                              Width="12" Height="12" Stretch="Uniform"
-                              Fill="{DynamicResource MaterialDesignBody}" Opacity="0.8"/>
+                              Width="11" Height="11" Stretch="Uniform"
+                              Fill="{DynamicResource MaterialDesignBody}" Opacity="0.75"/>
+                    </Button>
+                    <Button Name="SidebarCollapseButton" Grid.Column="2" Width="24" Height="24" Padding="0"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand" Margin="2,0,0,0"
+                            ToolTip="收起会话">
+                        <Path Data="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"
+                              Width="11" Height="11" Stretch="Uniform"
+                              Fill="{DynamicResource MaterialDesignBody}" Opacity="0.75"/>
                     </Button>
                 </Grid>
 
@@ -73,10 +74,10 @@
                 <StackPanel Name="SessionEmptyState" Grid.Row="1" VerticalAlignment="Center"
                             HorizontalAlignment="Center" Visibility="Collapsed">
                     <Path Data="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"
-                          Width="26" Height="26" Stretch="Uniform" HorizontalAlignment="Center"
-                          Fill="{DynamicResource MaterialDesignBody}" Opacity="0.22"/>
-                    <TextBlock Text="还没有会话" FontSize="11" Margin="0,7,0,0" HorizontalAlignment="Center"
-                               Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.45"/>
+                          Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center"
+                          Fill="{DynamicResource MaterialDesignBody}" Opacity="0.18"/>
+                    <TextBlock Text="还没有会话" FontSize="11" Margin="0,8,0,0" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.35"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -92,19 +93,29 @@
         <!-- 头部说明、模型选择与状态 -->
         <Grid Grid.Row="0" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <StackPanel>
+
+            <!-- 侧栏收起后，展开按钮停在它消失的位置，而不是混进右侧的模型选择区 -->
+            <Button Name="SidebarToggleButton" Grid.Column="0" Width="28" Height="28" Padding="0"
+                    Background="Transparent" BorderThickness="0" Cursor="Hand"
+                    ToolTip="展开会话列表" VerticalAlignment="Center"
+                    Margin="0,0,8,0" Visibility="Collapsed">
+                <Path Data="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"
+                      Width="12" Height="12" Stretch="Uniform"
+                      Fill="{DynamicResource MaterialDesignBody}" Opacity="0.75"/>
+            </Button>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <TextBlock Text="AI 助手" FontSize="18" FontWeight="Bold"/>
                 <TextBlock Text="连续智能调课、课表问答与设置调整" FontSize="12"
                            Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Margin="0,2,0,0"/>
             </StackPanel>
 
-            <!-- 对话界面模型快速切换下拉框 -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Name="SidebarToggleButton" Content="会话列表" FontSize="12" Padding="12,2"
-                        VerticalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed"/>
+            <!-- 模型快速切换（单会话模式下这里还会出现「新建会话」） -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Name="NewSessionButton" FontSize="12" Margin="0,0,12,0"
                         VerticalAlignment="Center" Padding="10,2">
                     <StackPanel Orientation="Horizontal">
@@ -116,7 +127,7 @@
                 </Button>
                 <TextBlock Text="当前模型:" VerticalAlignment="Center" FontSize="12"
                            Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Margin="0,0,6,0"/>
-                <ComboBox Name="ModelSelectComboBox" MinWidth="180" MaxWidth="260" VerticalAlignment="Center" Height="28"/>
+                <ComboBox Name="ModelSelectComboBox" MinWidth="170" MaxWidth="240" VerticalAlignment="Center" Height="28"/>
             </StackPanel>
         </Grid>
 

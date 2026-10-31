@@ -51,7 +51,8 @@ public partial class ChatWindow : Window
         if (SendButton != null) SendButton.Click += (s, e) => SendCurrentMessage();
         if (NewSessionButton != null) NewSessionButton.Click += OnNewSessionClicked;
         if (SidebarNewSessionButton != null) SidebarNewSessionButton.Click += OnNewSessionClicked;
-        if (SidebarToggleButton != null) SidebarToggleButton.Click += OnSidebarToggleClicked;
+        if (SidebarToggleButton != null) SidebarToggleButton.Click += OnSidebarExpandClicked;
+        if (SidebarCollapseButton != null) SidebarCollapseButton.Click += OnSidebarCollapseClicked;
 
         // 下拉框切换只订阅一次。放在 InitModelSelector 里会随每次外部配置刷新
         // 叠加一个匿名处理器，用户每切一次模型就多并发执行一轮保存与写盘。
@@ -444,10 +445,6 @@ public partial class ChatWindow : Window
         var sessions = Manager.Sessions.OrderByDescending(s => s.LastActiveAt).ToList();
 
         if (SessionCountText != null) SessionCountText.Text = sessions.Count.ToString();
-        if (SessionCountBadge != null)
-        {
-            SessionCountBadge.Visibility = sessions.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        }
         if (SessionEmptyState != null)
         {
             SessionEmptyState.Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -458,54 +455,49 @@ public partial class ChatWindow : Window
             var isActive = session.Id == Manager.ActiveSessionId;
             var captured = session; // 避免闭包捕获循环变量
 
-            // 左侧选中指示条：始终占位，避免切换时文字左右跳动
-            var indicator = new Border
-            {
-                Width = 3,
-                Height = 26,
-                CornerRadius = new CornerRadius(2),
-                Margin = new Thickness(0, 0, 8, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            if (isActive) indicator.SetResourceReference(Border.BackgroundProperty, "PrimaryHueMidBrush");
-            else indicator.Background = Brushes.Transparent;
-
             // 会话图标：选中实心 + 强调色，未选中描边 + 次要色
             var icon = new Shapes.Path
             {
                 Data = Geometry.Parse(isActive ? IconChatFilled : IconChatOutline),
-                Width = 14,
-                Height = 14,
+                Width = 13,
+                Height = 13,
                 Stretch = Stretch.Uniform,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
-                Opacity = isActive ? 1.0 : 0.5
+                Margin = new Thickness(0, 0, 8, 0)
             };
             icon.SetResourceReference(
                 Shapes.Shape.FillProperty,
                 isActive ? "PrimaryHueMidBrush" : "MaterialDesignBody");
+            icon.Opacity = isActive ? 1.0 : 0.45;
 
             var title = new TextBlock
             {
                 Text = session.Title,
                 FontSize = 12.5,
-                TextTrimming = TextTrimming.CharacterEllipsis
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
             };
-            if (isActive) title.FontWeight = FontWeights.SemiBold;
+            if (isActive)
+            {
+                title.FontWeight = FontWeights.SemiBold;
+                title.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryHueMidBrush");
+            }
+            else
+            {
+                title.Opacity = 0.85;
+            }
 
+            // 时间与删除共用右侧一格：平时显示时间，悬停时时间隐去、删除浮现。
+            // 这样每行只留「图标 + 标题」，不会因为常驻的 ✕ 变成一排乱码。
             var time = new TextBlock
             {
                 Text = FormatSessionTime(session.LastActiveAt),
                 FontSize = 10.5,
-                Opacity = 0.5,
-                TextTrimming = TextTrimming.CharacterEllipsis
+                Opacity = 0.4,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
             };
 
-            var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            texts.Children.Add(title);
-            texts.Children.Add(time);
-
-            // 删除：图标按钮。用 Border 而不是 Button，避免 MaterialDesign 的按钮内边距和悬停底色把行撑乱
             var closeIcon = new Shapes.Path
             {
                 Data = Geometry.Parse(IconClose),
@@ -523,49 +515,71 @@ public partial class ChatWindow : Window
                 Height = 22,
                 CornerRadius = new CornerRadius(6),
                 Background = Brushes.Transparent,
-                Opacity = 0.38,
+                Opacity = 0,
                 Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Child = closeIcon
             };
             ToolTipService.SetToolTip(deleteHost, "删除会话");
-            deleteHost.MouseEnter += (_, _) => deleteHost.Opacity = 0.9;
-            deleteHost.MouseLeave += (_, _) => deleteHost.Opacity = 0.38;
             deleteHost.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true; // 阻止冒泡，否则会顺带切换会话
                 Manager.DeleteSession(captured.Id);
             };
 
+            var slot = new Grid { Width = 46 };
+            slot.Children.Add(time);
+            slot.Children.Add(deleteHost);
+
+            // 选中态的强调色底纹：空 Border + 低透明度，避免直接给条目刷不透明色块
+            var tint = new Border { CornerRadius = new CornerRadius(8), IsHitTestVisible = false };
+            if (isActive)
+            {
+                tint.SetResourceReference(Border.BackgroundProperty, "PrimaryHueMidBrush");
+                tint.Opacity = 0.12;
+            }
+            else
+            {
+                tint.Opacity = 0;
+            }
+
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(indicator, 0);
-            Grid.SetColumn(icon, 1);
-            Grid.SetColumn(texts, 2);
-            Grid.SetColumn(deleteHost, 3);
-            grid.Children.Add(indicator);
+            Grid.SetColumn(icon, 0);
+            Grid.SetColumn(title, 1);
+            Grid.SetColumn(slot, 2);
             grid.Children.Add(icon);
-            grid.Children.Add(texts);
-            grid.Children.Add(deleteHost);
+            grid.Children.Add(title);
+            grid.Children.Add(slot);
 
-            var border = new Border
+            var layer = new Grid();
+            layer.Children.Add(tint);
+            layer.Children.Add(grid);
+
+            var row = new Border
             {
                 Style = (Style)FindResource("SessionItemBorderStyle"),
                 Cursor = Cursors.Hand,
-                Child = grid
+                Height = 34,
+                Child = layer
             };
-            if (isActive)
+            ToolTipService.SetToolTip(row, $"{session.Title}（{session.LastActiveAt:MM-dd HH:mm}）");
+            row.MouseEnter += (_, _) =>
             {
-                // 用资源引用而非 TryFindResource 赋值，深浅主题切换时才能跟随更新
-                border.SetResourceReference(Border.BackgroundProperty, "MaterialDesignCardBackground");
-            }
-            ToolTipService.SetToolTip(border, $"{session.Title}（{session.LastActiveAt:MM-dd HH:mm}）");
-            border.MouseLeftButtonUp += (_, _) => Manager.ActivateSession(captured.Id);
+                time.Opacity = 0;
+                deleteHost.Opacity = 0.85;
+            };
+            row.MouseLeave += (_, _) =>
+            {
+                time.Opacity = 0.4;
+                deleteHost.Opacity = 0;
+            };
+            row.MouseLeftButtonUp += (_, _) => Manager.ActivateSession(captured.Id);
 
-            SessionListStackPanel.Children.Add(border);
+            SessionListStackPanel.Children.Add(row);
         }
     }
 
@@ -582,7 +596,7 @@ public partial class ChatWindow : Window
         return time.ToString("MM-dd");
     }
 
-    /// <summary>多会话模式：显示侧栏与「会话列表」开关、隐藏顶部新建按钮；单会话模式反之。</summary>
+    /// <summary>多会话模式：显示侧栏；单会话模式隐藏侧栏并在头部显示「新建会话」。</summary>
     private void UpdateSidebarVisibility()
     {
         var multi = _settings.IsMultiSessionEnabled;
@@ -590,10 +604,10 @@ public partial class ChatWindow : Window
         {
             SessionSidebarBorder.Visibility = multi && _sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
         }
+        // 展开按钮只在侧栏收起时出现，位置固定在内容区左缘
         if (SidebarToggleButton != null)
         {
-            SidebarToggleButton.Visibility = multi ? Visibility.Visible : Visibility.Collapsed;
-            SidebarToggleButton.Content = _sidebarExpanded ? "收起会话" : "会话列表";
+            SidebarToggleButton.Visibility = multi && !_sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
         }
         if (NewSessionButton != null)
         {
@@ -601,9 +615,15 @@ public partial class ChatWindow : Window
         }
     }
 
-    private void OnSidebarToggleClicked(object? sender, RoutedEventArgs e)
+    private void OnSidebarExpandClicked(object? sender, RoutedEventArgs e)
     {
-        _sidebarExpanded = !_sidebarExpanded;
+        _sidebarExpanded = true;
+        UpdateSidebarVisibility();
+    }
+
+    private void OnSidebarCollapseClicked(object? sender, RoutedEventArgs e)
+    {
+        _sidebarExpanded = false;
         UpdateSidebarVisibility();
     }
 }
