@@ -87,6 +87,8 @@ public partial class ChatWindow : Window
         }
 
         _settings = LoadPluginSettings();
+        // 侧栏初始状态取设置里的「默认展开」，用户本次的展开/收起不会被记住
+        _sidebarExpanded = _settings.IsSessionSidebarExpandedByDefault;
         InitModelSelector();
 
         // 附着到全局会话管理器：状态与进行中的回合都在管理器里存活

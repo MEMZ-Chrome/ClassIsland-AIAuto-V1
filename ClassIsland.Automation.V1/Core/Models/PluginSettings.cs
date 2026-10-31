@@ -111,6 +111,8 @@ public class PluginSettings
     // 多会话对话
     /// <summary>启用后聊天窗口左侧显示会话列表，各会话历史独立保存。</summary>
     public bool IsMultiSessionEnabled { get; set; } = true;
+    /// <summary>会话列表在打开窗口时默认展开；关闭则默认收起，需要时点左上角的展开按钮。</summary>
+    public bool IsSessionSidebarExpandedByDefault { get; set; } = true;
     /// <summary>每次打开对话窗口时直接新建会话；关闭则继续上一次会话。</summary>
     public bool IsNewSessionOnOpenEnabled { get; set; } = false;
     /// <summary>会话标题由 AI 总结生成（每会话首次对话后自动命名，额外消耗少量 token）。</summary>

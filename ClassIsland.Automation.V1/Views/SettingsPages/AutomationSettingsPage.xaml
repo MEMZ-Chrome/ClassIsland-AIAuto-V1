@@ -82,6 +82,9 @@
                             <TextBlock Text="会话管理" FontWeight="SemiBold" Margin="0,0,0,6"/>
                             <CheckBox Name="IsMultiSessionEnabledCheckBox"
                                       Content="启用多会话模式（聊天窗口左侧显示会话列表，各会话历史独立）" IsChecked="True" Margin="0,0,0,8"/>
+                            <CheckBox Name="SessionSidebarExpandedCheckBox" Margin="28,0,0,8"
+                                      Content="打开窗口时默认展开会话列表（关闭后默认收起，点左上角按钮展开）"
+                                      IsChecked="True"/>
                             <CheckBox Name="NewSessionOnOpenCheckBox"
                                       Content="每次打开对话窗口时新建会话（关闭则继续上一次会话）"/>
                             <CheckBox Name="AiSessionTitleCheckBox"
