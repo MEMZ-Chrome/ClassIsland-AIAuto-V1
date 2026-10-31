@@ -246,9 +246,10 @@
 
         <!-- 图片状态栏 -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,6">
-            <Button Name="SelectImageButton" Content="添加课表图片" Padding="8,4"/>
+            <Button Name="SelectImageButton" Content="添加图片" Padding="8,4"/>
             <TextBlock Name="ImageStatusTextBlock" VerticalAlignment="Center"
-                       Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7" Text="未选择图片" Margin="8,0,8,0"/>
+                       Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.7"
+                       Text="未选择图片，可直接把文件拖进窗口" Margin="8,0,8,0"/>
             <Button Name="ClearImageButton" Content="清除" Visibility="Collapsed" Padding="8,4"/>
         </StackPanel>
 
@@ -282,6 +283,23 @@
             <Button Name="SendButton" Grid.Column="1" Content="发送" Margin="8,0,0,0" Padding="16,6"
                     VerticalAlignment="Bottom"/>
         </Grid>
+        </Grid>
+
+        <!-- 拖拽提示层：文件拖到窗口上方时整窗接管，松手即导入 -->
+        <Grid Name="DropOverlay" Grid.ColumnSpan="2" Visibility="Collapsed" IsHitTestVisible="False"
+              Background="{DynamicResource MaterialDesignPaper}">
+            <Rectangle Margin="8" RadiusX="14" RadiusY="14" StrokeThickness="1.5"
+                       StrokeDashArray="4 3" Stroke="{DynamicResource PrimaryHueMidBrush}" Opacity="0.7"/>
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Path Data="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"
+                      Width="34" Height="34" Stretch="Uniform" HorizontalAlignment="Center"
+                      Fill="{DynamicResource PrimaryHueMidBrush}" Opacity="0.85"/>
+                <TextBlock Text="松开以添加" FontSize="14" FontWeight="SemiBold" Margin="0,10,0,0"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="图片会作为附件发送，文本文件的内容会填进输入框" FontSize="11.5" Margin="0,5,0,0"
+                           HorizontalAlignment="Center" Opacity="0.55"
+                           Foreground="{DynamicResource MaterialDesignBody}"/>
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

@@ -54,6 +54,12 @@ public partial class ChatWindow : Window
         if (SidebarToggleButton != null) SidebarToggleButton.Click += OnSidebarExpandClicked;
         if (SidebarCollapseButton != null) SidebarCollapseButton.Click += OnSidebarCollapseClicked;
 
+        // 整窗接收拖拽：图片作为附件，文本文件内容填进输入框
+        AllowDrop = true;
+        DragOver += OnWindowDragOver;
+        DragLeave += OnWindowDragLeave;
+        Drop += OnWindowDrop;
+
         // 下拉框切换只订阅一次。放在 InitModelSelector 里会随每次外部配置刷新
         // 叠加一个匿名处理器，用户每切一次模型就多并发执行一轮保存与写盘。
         if (ModelSelectComboBox != null)
@@ -357,7 +363,22 @@ public partial class ChatWindow : Window
         ScrollToBottom();
     }
 
-    // ==================== 图片选择 ====================
+    // ==================== 图片选择 / 拖拽导入 ====================
+
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif" };
+
+    private static readonly string[] TextExtensions =
+    {
+        ".txt", ".md", ".markdown", ".json", ".csv", ".xml", ".yml", ".yaml", ".log", ".cs", ".xaml", ".axaml"
+    };
+
+    /// <summary>文本文件直接塞进输入框，体积上限 256 KB，避免把超长日志灌进上下文。</summary>
+    private const long MaxTextBytes = 256 * 1024;
+
+    private void SetImageStatus(string text)
+    {
+        if (ImageStatusTextBlock != null) ImageStatusTextBlock.Text = text;
+    }
 
     private void OnSelectImageClicked(object? sender, RoutedEventArgs e)
     {
@@ -369,60 +390,156 @@ public partial class ChatWindow : Window
 
         if (dialog.ShowDialog() == true)
         {
-            var filePath = dialog.FileName;
-
-            // 上限 8 MB：图片会被 Base64 后随每次请求发送（体积再涨约 1/3），
-            // 手机拍摄的高清课表照片常有 10MB+，不拦截会卡死 UI 线程甚至 OOM。
-            const long maxBytes = 8 * 1024 * 1024;
-            long fileLength = 0;
-            try { fileLength = new FileInfo(filePath).Length; } catch { }
-            if (fileLength > maxBytes)
-            {
-                _selectedImageBytes = null;
-                if (ImageStatusTextBlock != null)
-                {
-                    ImageStatusTextBlock.Text = $"图片过大（{fileLength / 1024 / 1024} MB），请压缩到 8 MB 以内";
-                }
-                if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            byte[] imageBytes;
-            try { imageBytes = File.ReadAllBytes(filePath); }
-            catch
-            {
-                if (ImageStatusTextBlock != null) ImageStatusTextBlock.Text = "读取图片失败";
-                return;
-            }
-            if (imageBytes.Length > maxBytes)
-            {
-                _selectedImageBytes = null;
-                if (ImageStatusTextBlock != null) ImageStatusTextBlock.Text = "图片过大，请压缩到 8 MB 以内";
-                if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            _selectedImageBytes = imageBytes;
-
-            var ext = Path.GetExtension(filePath).ToLowerInvariant();
-            _imageMimeType = ext switch
-            {
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".webp" => "image/webp",
-                _ => "image/png"
-            };
-
-            var fileName = Path.GetFileName(filePath);
-            if (ImageStatusTextBlock != null) ImageStatusTextBlock.Text = $"已选择: {fileName}";
-            if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Visible;
+            TryAttachImage(dialog.FileName);
         }
+    }
+
+    /// <summary>
+    /// 把图片读入待发送区。上限 8 MB：图片会被 Base64 后随每次请求发送（体积再涨约 1/3），
+    /// 手机拍摄的高清课表照片常有 10MB+，不拦截会卡死 UI 线程甚至 OOM。
+    /// </summary>
+    private bool TryAttachImage(string filePath)
+    {
+        const long maxBytes = 8 * 1024 * 1024;
+
+        long fileLength = 0;
+        try { fileLength = new FileInfo(filePath).Length; } catch { }
+        if (fileLength > maxBytes)
+        {
+            _selectedImageBytes = null;
+            SetImageStatus($"图片过大（{fileLength / 1024 / 1024} MB），请压缩到 8 MB 以内");
+            if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Collapsed;
+            return false;
+        }
+
+        byte[] imageBytes;
+        try { imageBytes = File.ReadAllBytes(filePath); }
+        catch
+        {
+            SetImageStatus("读取图片失败");
+            return false;
+        }
+        if (imageBytes.Length > maxBytes)
+        {
+            _selectedImageBytes = null;
+            SetImageStatus("图片过大，请压缩到 8 MB 以内");
+            if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Collapsed;
+            return false;
+        }
+
+        _selectedImageBytes = imageBytes;
+
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        _imageMimeType = ext switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            _ => "image/png"
+        };
+
+        SetImageStatus($"已选择: {Path.GetFileName(filePath)}");
+        if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Visible;
+        return true;
     }
 
     private void OnClearImageClicked(object? sender, RoutedEventArgs? e)
     {
         _selectedImageBytes = null;
-        if (ImageStatusTextBlock != null) ImageStatusTextBlock.Text = "未选择图片";
+        SetImageStatus("未选择图片，可直接把文件拖进窗口");
         if (ClearImageButton != null) ClearImageButton.Visibility = Visibility.Collapsed;
+    }
+
+    // ---- 拖拽导入 ----
+
+    private void OnWindowDragOver(object sender, DragEventArgs e)
+    {
+        var accepts = e.Data.GetDataPresent(DataFormats.FileDrop);
+        e.Effects = accepts ? DragDropEffects.Copy : DragDropEffects.None;
+        if (DropOverlay != null)
+        {
+            DropOverlay.Visibility = accepts ? Visibility.Visible : Visibility.Collapsed;
+        }
+        e.Handled = true;
+    }
+
+    private void OnWindowDragLeave(object sender, DragEventArgs e)
+    {
+        if (DropOverlay != null) DropOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnWindowDrop(object sender, DragEventArgs e)
+    {
+        if (DropOverlay != null) DropOverlay.Visibility = Visibility.Collapsed;
+
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths || paths.Length == 0) return;
+
+        if (paths.Length > 1)
+        {
+            SetImageStatus($"一次只能拖入一个文件（收到 {paths.Length} 个）");
+            return;
+        }
+
+        HandleDroppedFile(paths[0]);
+    }
+
+    private void HandleDroppedFile(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            SetImageStatus("文件夹暂不支持，请拖入单个文件");
+            return;
+        }
+        if (!File.Exists(path))
+        {
+            SetImageStatus("这个文件不存在");
+            return;
+        }
+
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ImageExtensions.Contains(ext))
+        {
+            TryAttachImage(path);
+            return;
+        }
+        if (TextExtensions.Contains(ext))
+        {
+            InsertTextFile(path);
+            return;
+        }
+
+        SetImageStatus($"不支持的类型「{(string.IsNullOrEmpty(ext) ? "无扩展名" : ext)}」，可拖入图片或文本文件");
+    }
+
+    private void InsertTextFile(string path)
+    {
+        long length = 0;
+        try { length = new FileInfo(path).Length; } catch { }
+        if (length > MaxTextBytes)
+        {
+            SetImageStatus($"文件超过 256 KB（{length / 1024} KB），请截取需要的部分");
+            return;
+        }
+
+        string content;
+        try { content = File.ReadAllText(path); }
+        catch
+        {
+            SetImageStatus("读取文件失败，可能不是纯文本");
+            return;
+        }
+
+        var name = Path.GetFileName(path);
+        var block = $"【文件 {name}】\n{content.Trim()}";
+        if (InputTextBox != null)
+        {
+            var existing = InputTextBox.Text ?? "";
+            var merged = string.IsNullOrWhiteSpace(existing) ? block : existing.TrimEnd() + "\n\n" + block;
+            InputTextBox.Text = merged;
+            InputTextBox.CaretIndex = merged.Length;
+            InputTextBox.Focus();
+        }
+        SetImageStatus($"已把「{name}」的内容填进输入框");
     }
 
     // ==================== 会话侧栏 ====================
