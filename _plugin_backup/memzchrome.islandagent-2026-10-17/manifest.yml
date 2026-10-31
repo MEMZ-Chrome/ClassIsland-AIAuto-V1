@@ -1,0 +1,13 @@
+id: memzchrome.islandagent
+name: IslandAgent
+description: 接入AI大模型，支持上传课表图片自动解析配置科目、作息时间表与课表，支持自然语言调整软件设置项。
+entranceAssembly: "ClassIsland.Automation.V1.dll"
+url: https://github.com/MEMZ-Chrome/ClassIsland-AIAuto-V1
+version: 1.0.0.0
+apiVersion: 1.5.0.0
+author: MEMZ-Chrome
+readme: README.md
+repoOwner: MEMZ-Chrome
+repoName: ClassIsland-AIAuto-V1
+assetsRoot: main/ClassIsland.Automation.V1
+artifactName: ClassIsland.Automation.V1.cipx
