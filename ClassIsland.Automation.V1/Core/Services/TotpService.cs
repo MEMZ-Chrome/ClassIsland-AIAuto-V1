@@ -49,8 +49,8 @@ public static class TotpService
 
         for (int i = -allowedDriftSteps; i <= allowedDriftSteps; i++)
         {
-            string expected = ComputeHotp(cleanSecret, currentCounter + i);
-            if (string.Equals(expected, cleanCode, StringComparison.Ordinal))
+            string? expected = ComputeHotp(cleanSecret, currentCounter + i);
+            if (expected != null && string.Equals(expected, cleanCode, StringComparison.Ordinal))
             {
                 return true;
             }
@@ -65,13 +65,15 @@ public static class TotpService
     public static string ComputeCurrentTotp(string secret)
     {
         long currentCounter = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 30;
-        return ComputeHotp(CleanSecret(secret), currentCounter);
+        return ComputeHotp(CleanSecret(secret), currentCounter) ?? "";
     }
 
-    private static string ComputeHotp(string base32Secret, long counter)
+    private static string? ComputeHotp(string base32Secret, long counter)
     {
         byte[] key = FromBase32(base32Secret);
-        if (key.Length == 0) return "000000";
+        // 密钥为空说明 Base32 无效。这里必须返回 null（失败关闭），
+        // 不能返回 "000000"——否则任何非法密钥都会被 000000 这个验证码通过。
+        if (key.Length == 0) return null;
 
         byte[] counterBytes = BitConverter.GetBytes(counter);
         if (BitConverter.IsLittleEndian)

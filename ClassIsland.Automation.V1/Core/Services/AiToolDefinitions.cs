@@ -307,7 +307,7 @@ public static class AiToolDefinitions
                             ["isTimeAutoAdjustEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启网络时间自动校准" },
                             ["isClassChangingNotificationEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启下课/换课提醒" },
                             ["isDebugEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否开启调试模式" },
-                            ["selectedProfile"] = new JsonObject { ["type"] = "string", ["description"] = "当前启用的档案名称" }
+                            ["selectedProfile"] = new JsonObject { ["type"] = "string", ["description"] = "当前启用的档案名称（修改后需重启 ClassIsland 才会真正加载新档案）" }
                         },
                         ["required"] = new JsonArray()
                     }
@@ -338,7 +338,7 @@ public static class AiToolDefinitions
                 ["function"] = new JsonObject
                 {
                     ["name"] = "update_plugin_settings",
-                    ["description"] = "修改 IslandAgent 插件自身的设置并立即保存生效。可新增/修改/删除 AI 供应商，增删与启停模型，切换当前使用的模型，开关长期记忆与命令行权限，改写自定义提示词与长期记忆内容。当用户说“添加一个 xxx 供应商”“把模型换成 xxx”“关掉记忆”“记住我的提示词”时调用。注意：若用户启用了密码/TOTP 访问保护，供应商增删改、自定义提示词、长期记忆与命令行权限属于敏感设置，会被拒绝执行，应提示用户前往【设置 -> IslandAgent设置】手动操作。",
+                    ["description"] = "修改 IslandAgent 插件自身的设置并立即保存生效。可新增/修改/删除 AI 供应商，增删与启停模型，切换当前使用的模型，开关长期记忆（命令行执行权限只能由用户本人在设置页开启，AI 只能关闭），改写自定义提示词与长期记忆内容。当用户说“添加一个 xxx 供应商”“把模型换成 xxx”“关掉记忆”“记住我的提示词”时调用。注意：若用户启用了密码/TOTP 访问保护，供应商增删改、自定义提示词、长期记忆属于敏感设置，会被拒绝执行，应提示用户前往【设置 -> IslandAgent设置】手动操作。",
                     ["parameters"] = new JsonObject
                     {
                         ["type"] = "object",
@@ -371,7 +371,7 @@ public static class AiToolDefinitions
                             },
                             ["modelName"] = new JsonObject { ["type"] = "string", ["description"] = "模型名称，用于模型增删启停与切换当前模型" },
                             ["isMemoryEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否启用长期记忆系统" },
-                            ["isCommandExecutionEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否允许 AI 执行命令行命令" },
+                            ["isCommandExecutionEnabled"] = new JsonObject { ["type"] = "boolean", ["description"] = "是否允许 AI 执行命令行命令。出于安全考虑，AI 只能关闭、不能开启；开启必须由用户本人在设置页手动操作。" },
                             ["customPrompt"] = new JsonObject { ["type"] = "string", ["description"] = "自定义系统提示词全文" },
                             ["maxToolIterations"] = new JsonObject
                             {

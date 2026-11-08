@@ -36,6 +36,30 @@ public class ToolExecutor
         "SelectedProfile",
     ];
 
+    /// <summary>
+    /// 子进程输出解码用的编码。Windows 下 cmd.exe 重定向输出使用系统 OEM 代码页，
+    /// 而 .NET Core 的 Encoding.Default 是 UTF-8，直接用会让中文输出变成乱码。
+    /// </summary>
+    private static readonly System.Text.Encoding CommandOutputEncoding = CreateCommandOutputEncoding();
+
+    private static System.Text.Encoding CreateCommandOutputEncoding()
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return System.Text.Encoding.UTF8;
+            }
+
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            return System.Text.Encoding.GetEncoding(System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+        }
+        catch
+        {
+            return System.Text.Encoding.UTF8;
+        }
+    }
+
     private readonly IPublicProfileService? _profileService;
     private readonly IPublicUriNavigationService? _uriService;
     private readonly PluginSettings? _pluginSettings;
@@ -43,8 +67,9 @@ public class ToolExecutor
 
     /// <summary>
     /// 本次会话是否已通过密码 / TOTP 验证。
-    /// 用于阻止 AI 自行开启高危能力（命令行执行）。
+    /// 用于阻止 AI 修改供应商、提示词、长期记忆等敏感设置。
     /// 未设置任何访问保护时视为已授权，因为此时本来就没有需要绕过的门槛。
+    /// 注意：命令行执行权限不在此列——无论是否授权，AI 都只能关闭、不能开启。
     /// </summary>
     public bool IsAuthorizedSession { get; set; }
 
@@ -943,8 +968,12 @@ public class ToolExecutor
                 if (themeServiceType != null)
                 {
                     var ts = IAppHost.Host?.Services.GetService(themeServiceType);
-                    var setMethod = themeServiceType.GetMethod("SetTheme");
-                    setMethod?.Invoke(ts, new object?[] { type.GetProperty("Theme")?.GetValue(settingsObj), null });
+                    var themeMode = type.GetProperty("Theme")?.GetValue(settingsObj);
+                    var themeArgs = BuildThemeInvokeArgs(themeServiceType, ts, themeMode);
+                    if (themeArgs != null)
+                    {
+                        themeServiceType.GetMethod("SetTheme")?.Invoke(ts, themeArgs);
+                    }
                 }
             }
             catch { }
@@ -975,12 +1004,19 @@ public class ToolExecutor
             };
         }
 
+        var resultText = $"设置修改成功且已即时生效（无需用户手动点击）：\n• " + string.Join("\n• ", updatedList);
+        if (updatedList.Any(s => s.StartsWith("SelectedProfile = ", StringComparison.Ordinal)))
+        {
+            // 宿主只会在启动时按 SelectedProfile 加载档案，运行中改这个字段不会切换档案。
+            resultText += "\n注意：切换档案需要重启 ClassIsland 后才会真正加载新档案，当前界面仍显示旧档案。";
+        }
+
         return new ToolExecutionResult
         {
             ToolCallId = toolId,
             Name = "update_app_settings",
             Success = true,
-            Result = $"设置修改成功且已即时生效（无需用户手动点击）：\n• " + string.Join("\n• ", updatedList)
+            Result = resultText
         };
     }
 
@@ -1007,6 +1043,44 @@ public class ToolExecutor
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// 构造 IThemeService.SetTheme 的实参。1.x 的签名是
+    /// <c>SetTheme(int, Color, Color)</c>，2.x 是 <c>SetTheme(int, Color?)</c>。
+    /// 以前固定传两个参数，在 1.x 上必然抛 TargetParameterCountException 并被吞掉，
+    /// 表现为主题设置只落盘、界面不生效。
+    /// </summary>
+    private static object?[]? BuildThemeInvokeArgs(Type themeServiceType, object? themeService, object? themeMode)
+    {
+        var setMethod = themeServiceType.GetMethod("SetTheme");
+        if (setMethod == null) return null;
+
+        var parameters = setMethod.GetParameters();
+        if (parameters.Length == 2)
+        {
+            return new object?[] { themeMode, null };
+        }
+
+        if (parameters.Length == 3)
+        {
+            // 1.x 必须传入当前主色/辅色：传默认值会把用户自定义的主题色重置掉。
+            var currentTheme = themeService?.GetType().GetProperty("CurrentTheme")?.GetValue(themeService);
+            var primary = ReadThemeColor(currentTheme, "PrimaryMid", parameters[1].ParameterType);
+            var secondary = ReadThemeColor(currentTheme, "SecondaryMid", parameters[2].ParameterType);
+            if (primary == null || secondary == null) return null;
+            return new object?[] { themeMode, primary, secondary };
+        }
+
+        return null;
+    }
+
+    /// <summary>从 MaterialDesign 的 ColorPair 上反射读取当前颜色；读不到返回 null。</summary>
+    private static object? ReadThemeColor(object? theme, string pairPropertyName, Type colorType)
+    {
+        var pair = theme?.GetType().GetProperty(pairPropertyName)?.GetValue(theme);
+        var color = pair?.GetType().GetProperty("Color")?.GetValue(pair);
+        return color != null && colorType.IsInstanceOfType(color) ? color : null;
     }
 
     private ToolExecutionResult ExecuteGetPluginSettings(string toolId)
@@ -1089,8 +1163,7 @@ public class ToolExecutor
         bool touchesSensitiveSettings =
             action is "add_provider" or "set_provider" or "delete_provider" ||
             args["customPrompt"] != null ||
-            args["customMemory"] != null ||
-            args["isCommandExecutionEnabled"] != null;
+            args["customMemory"] != null;
         if (touchesSensitiveSettings && !IsAuthorizedSession)
         {
             return new ToolExecutionResult
@@ -1098,7 +1171,7 @@ public class ToolExecutor
                 ToolCallId = toolId,
                 Name = "update_plugin_settings",
                 Success = false,
-                Result = "当前已启用密码/TOTP 访问保护：供应商增删改、自定义提示词、长期记忆与命令行权限属于敏感设置，不能通过对话修改。请提示用户前往【设置 -> IslandAgent设置】手动操作。"
+                Result = "当前已启用密码/TOTP 访问保护：供应商增删改、自定义提示词与长期记忆属于敏感设置，不能通过对话修改。请提示用户前往【设置 -> IslandAgent设置】手动操作。"
             };
         }
 
@@ -1323,22 +1396,18 @@ public class ToolExecutor
                 _pluginSettings.IsCommandExecutionEnabled = false;
                 changes.Add("命令行执行权限已关闭");
             }
-            else if (!IsAuthorizedSession)
+            else
             {
-                // 开启命令行执行等同于把宿主用户权限交给模型，绝不能由模型自己决定。
-                // 只有通过密码/TOTP 验证的会话才允许开启，否则要求用户去设置页手动打开。
+                // 开启命令行执行等同于把宿主用户权限交给模型。即使当前会话已解锁，
+                // 也不能让 AI 代为开启——否则一次提示注入就能在同一轮内完成提权。
+                // 必须由用户本人在设置页手动勾选。
                 return new ToolExecutionResult
                 {
                     ToolCallId = toolId,
                     Name = "update_plugin_settings",
                     Success = false,
-                    Result = "出于安全考虑，命令行执行权限不能由 AI 自行开启。请在【设置 -> IslandAgent设置 -> 高级偏好】中由本人手动开启。"
+                    Result = "出于安全考虑，命令行执行权限不能由 AI 开启。请在【设置 -> IslandAgent设置 -> 高级偏好】中由本人手动开启。"
                 };
-            }
-            else
-            {
-                _pluginSettings.IsCommandExecutionEnabled = true;
-                changes.Add("命令行执行权限已开启");
             }
         }
         if (args["customPrompt"] is JsonNode promptNode)
@@ -1578,17 +1647,30 @@ public class ToolExecutor
         try
         {
             using var process = new System.Diagnostics.Process();
-            process.StartInfo = new System.Diagnostics.ProcessStartInfo
+            var isWindows = OperatingSystem.IsWindows();
+            var startInfo = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "cmd.exe",
-                Arguments = $"/c {cmd}",
+                FileName = isWindows ? "cmd.exe" : "/bin/sh",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                StandardOutputEncoding = System.Text.Encoding.Default,
-                StandardErrorEncoding = System.Text.Encoding.Default
+                // 不能用 Encoding.Default：.NET Core 下它是 UTF-8，而 cmd.exe 重定向输出
+                // 用的是系统 OEM 代码页（简体中文为 936），中文会全部变成乱码。
+                StandardOutputEncoding = CommandOutputEncoding,
+                StandardErrorEncoding = CommandOutputEncoding
             };
+            if (isWindows)
+            {
+                startInfo.Arguments = $"/c {cmd}";
+            }
+            else
+            {
+                // 非 Windows 宿主（ClassIsland 2.x 跨平台）没有 cmd.exe，改用 POSIX shell。
+                startInfo.ArgumentList.Add("-c");
+                startInfo.ArgumentList.Add(cmd);
+            }
+            process.StartInfo = startInfo;
 
             process.Start();
 

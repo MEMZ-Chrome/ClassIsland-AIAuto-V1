@@ -396,11 +396,12 @@ public class AiClientService
 
             // 极少数模型会在正文里复述调用过程却没有任何可解析的调用，
             // 若清洗后为空则保留原文，避免用户看到空气泡。
-            agentResponse.ReplyText = string.IsNullOrWhiteSpace(cleanedFinal) ? textContent.Trim() : cleanedFinal;
+            var finalText = string.IsNullOrWhiteSpace(cleanedFinal) ? textContent.Trim() : cleanedFinal;
+            agentResponse.ReplyText = finalText;
             conversationMessages.Add(new JsonObject
             {
                 ["role"] = "assistant",
-                ["content"] = cleanedFinal
+                ["content"] = finalText
             });
             break;
         }
@@ -411,6 +412,14 @@ public class AiClientService
         {
             agentResponse.ReplyText =
                 $"已连续调用工具 {maxIterations} 次仍未得出最终结论，本轮对话已停止。请补充更明确的信息后重试。";
+
+            // 必须写回上下文：窗口在 TurnEnded 后按上下文重建气泡，
+            // 只设置返回值会让这条提示在界面上直接消失，历史里也查不到。
+            conversationMessages.Add(new JsonObject
+            {
+                ["role"] = "assistant",
+                ["content"] = agentResponse.ReplyText
+            });
         }
 
         return agentResponse;

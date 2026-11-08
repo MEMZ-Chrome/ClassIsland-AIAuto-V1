@@ -26,6 +26,8 @@
     <PackageReference Include="System.Text.Json" Version="8.0.5">
       <ExcludeAssets>runtime; native</ExcludeAssets>
     </PackageReference>
+    <!-- cmd.exe 重定向输出使用系统 OEM 代码页（简中为 936），.NET Core 需要该包才能解码 -->
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 

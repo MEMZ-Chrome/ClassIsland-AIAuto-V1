@@ -117,6 +117,10 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
                 _settings.MaxToolIterations = updated.MaxToolIterations;
                 if (MaxToolIterationsTextBox != null) MaxToolIterationsTextBox.Text = updated.EffectiveMaxToolIterations.ToString();
+
+                // 供应商列表可能被 AI 在聊天窗口里增删改过，必须重建卡片，
+                // 否则页面停留在过时快照上，用户在旧卡片上编辑/删除极易造成脏写冲突。
+                RenderProvidersList();
             }
             finally
             {

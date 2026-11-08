@@ -80,7 +80,7 @@ public static class SecretProtectionService
 
             if (combined.Length < 16)
             {
-                return string.Empty;
+                return cipherText;
             }
 
             byte[] iv = new byte[16];
@@ -101,8 +101,9 @@ public static class SecretProtectionService
         }
         catch
         {
-            // 解密失败返回空字符串，避免异常崩溃
-            return string.Empty;
+            // 解密失败时原样返回密文。返回空串会让下一次保存用空值覆盖掉原密文，
+            // 造成密钥被静默永久清空；保留密文至少给用户留下恢复或重新填写的机会。
+            return cipherText;
         }
     }
 }

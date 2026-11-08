@@ -170,6 +170,7 @@ public sealed class ChatSessionManager
                 {
                     // 聊天窗口不提供解锁入口，因此只有「未设置任何访问保护」时才视为已授权。
                     // 设置了密码/TOTP 的用户必须去设置页改高危项，AI 不能替他开。
+                    // 命令行执行权限不受此标志影响：无论是否已授权，都只能由用户在设置页手动开启。
                     IsAuthorizedSession = !SecurityService.IsActiveProtectionEnabled(settings)
                 };
 

@@ -21,7 +21,7 @@ ClassIsland **1.x**（WPF）专用的 AI 插件。接入任意 OpenAI 兼容接�
 
 `.cipx` 可以直接在 ClassIsland 里安装，或者解压到 `Plugins/` 目录。
 
-本插件面向 ClassIsland 1.x，已在 1.7.0.1 上验证加载。
+本插件面向 ClassIsland 1.x（1.7.0.1 编译通过；运行时行为尚未在真机完整验证）。
 
 ## 配置
 
