@@ -68,7 +68,9 @@ public sealed class ChatSessionManager
         }
         else
         {
-            LoadSessionIntoContext(Sessions.OrderByDescending(s => s.LastActiveAt).First());
+            var latest = Sessions.OrderByDescending(s => s.LastActiveAt).First();
+            ActiveSessionId = latest.Id;
+            LoadSessionIntoContext(latest);
         }
     }
 
@@ -138,25 +140,30 @@ public sealed class ChatSessionManager
             TrimConversationHistory();
             var historyBaseline = Context.Count;
 
-            var userMsgContent = new JsonArray
-            {
-                new JsonObject { ["type"] = "text", ["text"] = textContent }
-            };
+            var hadImage = imageBytes is { Length: > 0 };
+            var userMessage = new JsonObject { ["role"] = "user" };
             if (imageBytes is { Length: > 0 })
             {
-                userMsgContent.Add(new JsonObject
+                userMessage["content"] = new JsonArray
                 {
-                    ["type"] = "image_url",
-                    ["image_url"] = new JsonObject
+                    new JsonObject { ["type"] = "text", ["text"] = textContent },
+                    new JsonObject
                     {
-                        ["url"] = $"data:{imageMime};base64,{Convert.ToBase64String(imageBytes)}"
+                        ["type"] = "image_url",
+                        ["image_url"] = new JsonObject
+                        {
+                            ["url"] = $"data:{imageMime};base64,{Convert.ToBase64String(imageBytes)}"
+                        }
                     }
-                });
+                };
+            }
+            else
+            {
+                userMessage["content"] = textContent;
             }
 
             var userMessageIndex = Context.Count;
-            Context.Add(new JsonObject { ["role"] = "user", ["content"] = userMsgContent });
-            var hadImage = imageBytes is { Length: > 0 };
+            Context.Add(userMessage);
 
             TurnStarted?.Invoke();
 
@@ -174,12 +181,18 @@ public sealed class ChatSessionManager
                     IsAuthorizedSession = !SecurityService.IsActiveProtectionEnabled(settings)
                 };
 
+                Action? onFirstResponse = null;
+                if (hadImage)
+                {
+                    onFirstResponse = () => StripImageFromHistory(userMessageIndex, textContent);
+                }
+
                 var response = await _aiClient.ExecuteAgentTurnAsync(
                     settings,
                     Context,
                     executor,
                     onProgress: (statusText, _) => TurnProgress?.Invoke(statusText),
-                    onFirstResponse: () => StripImageFromHistory(userMessageIndex, textContent));
+                    onFirstResponse: onFirstResponse);
 
                 replyText = string.IsNullOrWhiteSpace(response.ReplyText) ? "操作已执行完毕。" : response.ReplyText;
                 success = true;
@@ -309,12 +322,15 @@ public sealed class ChatSessionManager
     private void StripImageFromHistory(int userMessageIndex, string textContent)
     {
         if (userMessageIndex < 0 || userMessageIndex >= Context.Count) return;
-        if (Context[userMessageIndex]?["content"] is JsonArray)
+        if (Context[userMessageIndex]?["content"] is JsonArray arr &&
+            arr.Any(p => p is JsonObject po && po["type"]?.GetValue<string>() == "image_url"))
         {
             Context[userMessageIndex] = new JsonObject
             {
                 ["role"] = "user",
-                ["content"] = $"{textContent}（用户上传了一张课表图片）"
+                ["content"] = string.IsNullOrWhiteSpace(textContent)
+                    ? "（用户上传了一张课表图片）"
+                    : $"{textContent}（用户上传了一张课表图片）"
             };
         }
     }
