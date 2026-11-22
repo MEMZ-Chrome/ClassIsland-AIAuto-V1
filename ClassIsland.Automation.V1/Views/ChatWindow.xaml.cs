@@ -11,6 +11,7 @@ using Shapes = System.Windows.Shapes;
 using ClassIsland.Automation.Core.Models;
 using ClassIsland.Automation.Core.Services;
 using ClassIsland.Core.Abstractions.Services;
+using ClassIsland.Core.Controls;
 using Microsoft.Win32;
 
 namespace ClassIsland.Automation.V1.Views;
@@ -20,7 +21,7 @@ namespace ClassIsland.Automation.V1.Views;
 /// <see cref="ChatSessionManager"/> 单例持有，因此关闭窗口后任务继续后台执行，
 /// 重新打开窗口附着回同一份状态。
 /// </summary>
-public partial class ChatWindow : Window
+public partial class ChatWindow : MyWindow
 {
     private byte[]? _selectedImageBytes;
     private string _imageMimeType = "image/png";
