@@ -161,6 +161,18 @@ public partial class AutomationSettingsPage : SettingsPageBase
         // 关键安全设计：待验证的暂存 TOTP 绝不能使页面进入锁定状态，防止用户因手环未同步而卡死！
         if (SecurityService.IsActiveProtectionEnabled(_settings) && !_isUnlocked)
         {
+            if (LockHintTextBlock != null)
+            {
+                bool hasPwd = SecurityService.HasPassword(_settings);
+                bool hasTotp = SecurityService.HasActiveTotp(_settings);
+                LockHintTextBlock.Text = (hasPwd, hasTotp) switch
+                {
+                    (true, true) => "当前已开启固定密码与 TOTP 动态口令保护，输入任意一种即可解锁设置页面。",
+                    (true, false) => "当前已开启固定密码保护，请输入访问密码解锁设置页面。",
+                    (false, true) => "当前已开启 TOTP 动态口令保护，请输入验证器中的 6 位动态验证码解锁设置页面。",
+                    _ => "当前设置页面已开启访问保护，请验证身份后继续。"
+                };
+            }
             if (LockOverlayBorder != null) LockOverlayBorder.Visibility = Visibility.Visible;
             if (MainSettingsScrollViewer != null) MainSettingsScrollViewer.Visibility = Visibility.Collapsed;
         }
@@ -206,7 +218,14 @@ public partial class AutomationSettingsPage : SettingsPageBase
         {
             if (UnlockErrorTextBlock != null)
             {
-                UnlockErrorTextBlock.Text = "密码或 TOTP 动态验证码错误，请重新输入！";
+                bool hasPwd = SecurityService.HasPassword(_settings);
+                bool hasTotp = SecurityService.HasActiveTotp(_settings);
+                UnlockErrorTextBlock.Text = (hasPwd, hasTotp) switch
+                {
+                    (true, false) => "访问密码错误，请重新输入！",
+                    (false, true) => "TOTP 动态验证码错误或已过期，请确认设备时间后重试！",
+                    _ => "密码或 TOTP 动态验证码错误，请重新输入！"
+                };
                 UnlockErrorTextBlock.Visibility = Visibility.Visible;
             }
             ShowToast("验证失败，请重试！", isError: true);
