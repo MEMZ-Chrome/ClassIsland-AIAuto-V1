@@ -427,7 +427,7 @@ public sealed class ChatSessionManager
             var title = success ? "IslandAgent 后台任务已完成" : "IslandAgent 后台任务失败";
             string? summary = null;
 
-            if (success)
+            if (success && SettingsManager.Current.IsAiNotificationSummaryEnabled)
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                 summary = await _aiClient.GenerateNotificationSummaryAsync(

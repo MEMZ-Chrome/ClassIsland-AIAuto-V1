@@ -119,6 +119,8 @@ public class PluginSettings
     public bool IsAiSessionTitleEnabled { get; set; } = false;
     /// <summary>对话任务在后台完成时发送系统通知提醒。</summary>
     public bool IsBackgroundTaskNotificationEnabled { get; set; } = false;
+    /// <summary>后台通知开启时，单独调用 AI 生成一句适合状态栏单行完整显示的简短摘要（额外消耗少量 token）；关闭则直接清洗截取原回复首行。</summary>
+    public bool IsAiNotificationSummaryEnabled { get; set; } = true;
 
     // 长期记忆系统
     public string CustomMemory { get; set; } = "";
