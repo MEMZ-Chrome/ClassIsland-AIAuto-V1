@@ -106,28 +106,49 @@
                     <!-- 选项卡 2：高级偏好 -->
                     <TabItem Header="高级偏好">
                         <StackPanel Margin="0,12,0,0">
-                            <StackPanel.Resources>
-                                <Style TargetType="ci:SettingsCard">
-                                    <Setter Property="Margin" Value="0,0,0,6"/>
-                                </Style>
-                            </StackPanel.Resources>
+                            <!--
+                              注意：ci:SettingsCard / ci:SettingsControl 是 UserControl，拥有独立 NameScope。
+                              如果把带 Name 的控件塞进它们的 Switcher 属性，WPF 编译会报 MC3093。
+                              因此这里统一采用与 SettingsCard 完全等价的 materialDesign:Card(Padding="12,10,16,10")
+                              + Grid(左 SettingsControl HasSwitcher="False"、右命名控件) 结构。
+                            -->
 
                             <!-- 功能与权限 -->
                             <ci:IconText Kind="LightningBoltOutline" Text="功能与权限" Margin="0,0,0,8"/>
 
-                            <ci:SettingsCard IconGlyph="DatabaseOutline" Header="启用长期记忆"
-                                             Description="开启后 AI 会在对话中自动参考并更新下方的长期记忆内容。">
-                                <ci:SettingsCard.Switcher>
-                                    <ToggleButton Name="IsMemoryEnabledCheckBox" IsChecked="True"/>
-                                </ci:SettingsCard.Switcher>
-                            </ci:SettingsCard>
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="DatabaseOutline"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="启用长期记忆"
+                                                        Description="开启后 AI 会在对话中自动参考并更新下方的长期记忆内容。"
+                                                        HasSwitcher="False"/>
+                                    <ToggleButton Name="IsMemoryEnabledCheckBox" Grid.Column="1"
+                                                  Margin="6,0,0,0" VerticalAlignment="Center" IsChecked="True"/>
+                                </Grid>
+                            </materialDesign:Card>
 
-                            <ci:SettingsCard IconGlyph="Code" Header="允许 AI 执行命令行命令"
-                                             Description="开启后 AI 可调用系统终端执行命令，存在较高安全风险，请仅在信任当前模型时启用。">
-                                <ci:SettingsCard.Switcher>
-                                    <ToggleButton Name="IsCommandExecutionEnabledCheckBox"/>
-                                </ci:SettingsCard.Switcher>
-                            </ci:SettingsCard>
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="Code"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="允许 AI 执行命令行命令"
+                                                        Description="开启后 AI 可调用系统终端执行命令，存在较高安全风险，请仅在信任当前模型时启用。"
+                                                        HasSwitcher="False"/>
+                                    <ToggleButton Name="IsCommandExecutionEnabledCheckBox" Grid.Column="1"
+                                                  Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </Grid>
+                            </materialDesign:Card>
 
                             <materialDesign:ColorZone Name="CommandWarningBanner" Background="#1AFF9800"
                                                       Margin="0,0,0,6" Visibility="Collapsed">
@@ -139,16 +160,25 @@
                                 </DockPanel>
                             </materialDesign:ColorZone>
 
-                            <ci:SettingsCard IconGlyph="Repeat" Header="工具调用轮数上限"
-                                             Description="单次提问内 AI 最多连续调用工具的轮数（1–50）。数值越大越能完成复杂任务，API 调用与费用也越多。">
-                                <ci:SettingsCard.Switcher>
-                                    <ci:NumbericTextBox Name="MaxToolIterationsTextBox"
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="Repeat"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="工具调用轮数上限"
+                                                        Description="单次提问内 AI 最多连续调用工具的轮数（1–50）。数值越大越能完成复杂任务，API 调用与费用也越多。"
+                                                        HasSwitcher="False"/>
+                                    <ci:NumbericTextBox Name="MaxToolIterationsTextBox" Grid.Column="1"
                                                         MinValue="1" MaxValue="50" Precision="0"
-                                                        Width="100" VerticalAlignment="Center"
+                                                        Width="100" Margin="6,0,0,0" VerticalAlignment="Center"
                                                         materialDesign:TextFieldAssist.SuffixText="轮"
                                                         Foreground="{DynamicResource MaterialDesignBody}"/>
-                                </ci:SettingsCard.Switcher>
-                            </ci:SettingsCard>
+                                </Grid>
+                            </materialDesign:Card>
 
                             <!-- 会话与通知 -->
                             <Separator Margin="0,16,0,8"/>
@@ -158,49 +188,88 @@
                                 <Expander Name="MultiSessionExpander" Background="Transparent" IsExpanded="True"
                                           TextBlock.Foreground="{DynamicResource MaterialDesignBody}">
                                     <Expander.Header>
-                                        <ci:SettingsControl IconGlyph="ViewQuiltOutline"
-                                                            Foreground="{DynamicResource MaterialDesignBody}"
-                                                            Header="启用多会话模式"
-                                                            Description="聊天窗口左侧显示会话列表，各会话历史独立保存在插件目录 sessions.json 中（最多保留 30 个会话）。"
-                                                            Margin="-12,0">
-                                            <ci:SettingsControl.Switcher>
-                                                <ToggleButton Name="IsMultiSessionEnabledCheckBox" IsChecked="True"/>
-                                            </ci:SettingsControl.Switcher>
-                                        </ci:SettingsControl>
+                                        <Grid Margin="-12,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ci:SettingsControl IconGlyph="ViewQuiltOutline"
+                                                                Foreground="{DynamicResource MaterialDesignBody}"
+                                                                Header="启用多会话模式"
+                                                                Description="聊天窗口左侧显示会话列表，各会话历史独立保存在插件目录 sessions.json 中（最多保留 30 个会话）。"
+                                                                HasSwitcher="False"/>
+                                            <ToggleButton Name="IsMultiSessionEnabledCheckBox" Grid.Column="1"
+                                                          Margin="6,0,0,0" VerticalAlignment="Center" IsChecked="True"/>
+                                        </Grid>
                                     </Expander.Header>
                                     <StackPanel Name="MultiSessionSubOptionsPanel" Margin="36,0,48,12">
-                                        <ci:SettingsControl IconGlyph="DockWindow" IsCompact="True"
-                                                            Foreground="{DynamicResource MaterialDesignBody}"
-                                                            Header="打开窗口时默认展开会话列表"
-                                                            Description="关闭后默认收起侧栏，需要时可点击窗口左上角按钮展开。">
-                                            <ci:SettingsControl.Switcher>
-                                                <ToggleButton Name="SessionSidebarExpandedCheckBox" IsChecked="True"/>
-                                            </ci:SettingsControl.Switcher>
-                                        </ci:SettingsControl>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ci:SettingsControl IconGlyph="DockWindow" IsCompact="True"
+                                                                Foreground="{DynamicResource MaterialDesignBody}"
+                                                                Header="打开窗口时默认展开会话列表"
+                                                                Description="关闭后默认收起侧栏，需要时可点击窗口左上角按钮展开。"
+                                                                HasSwitcher="False"/>
+                                            <ToggleButton Name="SessionSidebarExpandedCheckBox" Grid.Column="1"
+                                                          Margin="6,0,0,0" VerticalAlignment="Center" IsChecked="True"/>
+                                        </Grid>
                                     </StackPanel>
                                 </Expander>
                             </materialDesign:Card>
 
-                            <ci:SettingsCard IconGlyph="NotePlusOutline" Header="每次打开窗口时新建会话"
-                                             Description="开启后每次打开对话窗口自动开始新会话，关闭则继续上一次对话历史。">
-                                <ci:SettingsCard.Switcher>
-                                    <ToggleButton Name="NewSessionOnOpenCheckBox"/>
-                                </ci:SettingsCard.Switcher>
-                            </ci:SettingsCard>
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="NotePlusOutline"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="每次打开窗口时新建会话"
+                                                        Description="开启后每次打开对话窗口自动开始新会话，关闭则继续上一次对话历史。"
+                                                        HasSwitcher="False"/>
+                                    <ToggleButton Name="NewSessionOnOpenCheckBox" Grid.Column="1"
+                                                  Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </Grid>
+                            </materialDesign:Card>
 
-                            <ci:SettingsCard IconGlyph="AutoMode" Header="AI 自动总结会话标题"
-                                             Description="每会话首次对话后由模型自动命名，会额外消耗少量 Token。">
-                                <ci:SettingsCard.Switcher>
-                                    <ToggleButton Name="AiSessionTitleCheckBox"/>
-                                </ci:SettingsCard.Switcher>
-                            </ci:SettingsCard>
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="AutoMode"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="AI 自动总结会话标题"
+                                                        Description="每会话首次对话后由模型自动命名，会额外消耗少量 Token。"
+                                                        HasSwitcher="False"/>
+                                    <ToggleButton Name="AiSessionTitleCheckBox" Grid.Column="1"
+                                                  Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </Grid>
+                            </materialDesign:Card>
 
-                            <ci:SettingsCard IconGlyph="BellNotificationOutline" Header="后台任务完成时发送系统通知"
-                                             Description="关闭或隐藏对话窗口后，AI 后台任务完成时通过 ClassIsland 提醒通知您。">
-                                <ci:SettingsCard.Switcher>
-                                    <ToggleButton Name="BackgroundTaskNotificationCheckBox"/>
-                                </ci:SettingsCard.Switcher>
-                            </ci:SettingsCard>
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="BellNotificationOutline"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="后台任务完成时发送系统通知"
+                                                        Description="关闭或隐藏对话窗口后，AI 后台任务完成时通过 ClassIsland 提醒通知您。"
+                                                        HasSwitcher="False"/>
+                                    <ToggleButton Name="BackgroundTaskNotificationCheckBox" Grid.Column="1"
+                                                  Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </Grid>
+                            </materialDesign:Card>
 
                             <!-- 提示词与记忆 -->
                             <Separator Margin="0,16,0,8"/>
@@ -226,19 +295,23 @@
                             <materialDesign:Card Padding="12,10,16,12" Margin="0,0,0,6"
                                                  Foreground="{DynamicResource MaterialDesignBody}">
                                 <StackPanel>
-                                    <ci:SettingsControl IconGlyph="DatabaseOutline"
-                                                        Foreground="{DynamicResource MaterialDesignBody}"
-                                                        Header="长期记忆内容"
-                                                        Description="记录教室、作息或课表相关的长期信息，开启长期记忆后会自动提供给 AI。"
-                                                        Margin="0,0,0,10">
-                                        <ci:SettingsControl.Switcher>
-                                            <Button Name="ClearMemoryButton"
-                                                    Style="{StaticResource MaterialDesignFlatButton}"
-                                                    Foreground="IndianRed">
-                                                <ci:IconText Kind="Delete" Text="清空"/>
-                                            </Button>
-                                        </ci:SettingsControl.Switcher>
-                                    </ci:SettingsControl>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ci:SettingsControl IconGlyph="DatabaseOutline"
+                                                            Foreground="{DynamicResource MaterialDesignBody}"
+                                                            Header="长期记忆内容"
+                                                            Description="记录教室、作息或课表相关的长期信息，开启长期记忆后会自动提供给 AI。"
+                                                            HasSwitcher="False"/>
+                                        <Button Name="ClearMemoryButton" Grid.Column="1" Margin="6,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource MaterialDesignFlatButton}"
+                                                Foreground="IndianRed">
+                                            <ci:IconText Kind="Delete" Text="清空"/>
+                                        </Button>
+                                    </Grid>
                                     <TextBox Name="CustomMemoryTextBox"
                                              Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                              materialDesign:HintAssist.Hint="长期记忆内容（也可在对话中让 AI 自动更新）"
@@ -259,18 +332,23 @@
                             <materialDesign:Card Padding="12,10,16,12" Margin="0,0,0,6"
                                                  Foreground="{DynamicResource MaterialDesignBody}">
                                 <StackPanel>
-                                    <ci:SettingsControl IconGlyph="PasswordOutline"
-                                                        Foreground="{DynamicResource MaterialDesignBody}"
-                                                        Header="固定密码"
-                                                        Description="设置访问保护密码，打开设置页或执行敏感操作时验证。">
-                                        <ci:SettingsControl.Switcher>
-                                            <Button Name="ClearPasswordButton"
-                                                    Style="{StaticResource MaterialDesignFlatButton}"
-                                                    Foreground="IndianRed" Visibility="Collapsed">
-                                                <ci:IconText Kind="Clear" Text="清除密码"/>
-                                            </Button>
-                                        </ci:SettingsControl.Switcher>
-                                    </ci:SettingsControl>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ci:SettingsControl IconGlyph="PasswordOutline"
+                                                            Foreground="{DynamicResource MaterialDesignBody}"
+                                                            Header="固定密码"
+                                                            Description="设置访问保护密码，打开设置页或执行敏感操作时验证。"
+                                                            HasSwitcher="False"/>
+                                        <Button Name="ClearPasswordButton" Grid.Column="1" Margin="6,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource MaterialDesignFlatButton}"
+                                                Foreground="IndianRed" Visibility="Collapsed">
+                                            <ci:IconText Kind="Clear" Text="清除密码"/>
+                                        </Button>
+                                    </Grid>
 
                                     <TextBlock Name="PasswordStatusTextBlock"
                                                Text="当前状态：未设置固定密码（默认无密码）"
@@ -298,23 +376,27 @@
                                 <Expander Name="TotpExpander" Background="Transparent" IsExpanded="True"
                                           TextBlock.Foreground="{DynamicResource MaterialDesignBody}">
                                     <Expander.Header>
-                                        <ci:SettingsControl IconGlyph="TimerSyncOutline"
-                                                            Foreground="{DynamicResource MaterialDesignBody}"
-                                                            Header="TOTP 动态口令"
-                                                            Description="使用手机或手环的验证器 App（如 Microsoft Authenticator）生成 6 位动态验证码。"
-                                                            Margin="-12,0">
-                                            <ci:SettingsControl.Switcher>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Button Name="SetupTotpButton"
-                                                            Style="{StaticResource MaterialDesignFlatButton}"
-                                                            Content="生成并配置 TOTP"/>
-                                                    <Button Name="DisableTotpButton"
-                                                            Style="{StaticResource MaterialDesignFlatButton}"
-                                                            Foreground="IndianRed" Content="关闭 TOTP"
-                                                            Margin="4,0,0,0" Visibility="Collapsed"/>
-                                                </StackPanel>
-                                            </ci:SettingsControl.Switcher>
-                                        </ci:SettingsControl>
+                                        <Grid Margin="-12,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ci:SettingsControl IconGlyph="TimerSyncOutline"
+                                                                Foreground="{DynamicResource MaterialDesignBody}"
+                                                                Header="TOTP 动态口令"
+                                                                Description="使用手机或手环的验证器 App（如 Microsoft Authenticator）生成 6 位动态验证码。"
+                                                                HasSwitcher="False"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                        Margin="6,0,0,0" VerticalAlignment="Center">
+                                                <Button Name="SetupTotpButton"
+                                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                                        Content="生成并配置 TOTP"/>
+                                                <Button Name="DisableTotpButton"
+                                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                                        Foreground="IndianRed" Content="关闭 TOTP"
+                                                        Margin="4,0,0,0" Visibility="Collapsed"/>
+                                            </StackPanel>
+                                        </Grid>
                                     </Expander.Header>
                                     <StackPanel Margin="36,0,24,12">
                                         <TextBlock Name="TotpStatusTextBlock"
