@@ -1,21 +1,22 @@
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
-using Shapes = System.Windows.Shapes;
 using ClassIsland.Automation.Core.Models;
 using ClassIsland.Automation.Core.Services;
 using ClassIsland.Core.Abstractions.Controls;
 using ClassIsland.Core.Attributes;
+using ClassIsland.Core.Controls;
 using ClassIsland.Core.Enums.SettingsWindow;
+using MaterialDesignThemes.Wpf;
 
 namespace ClassIsland.Automation.V1.Views.SettingsPages;
 
-[SettingsPageInfo("memzchrome.islandagent.settings", "IslandAgent设置", SettingsPageCategory.External)]
+[SettingsPageInfo("memzchrome.islandagent.settings", "IslandAgent设置",
+    PackIconKind.RobotOutline, PackIconKind.Robot, SettingsPageCategory.External)]
 public partial class AutomationSettingsPage : SettingsPageBase
 {
     private PluginSettings _settings;
@@ -28,12 +29,17 @@ public partial class AutomationSettingsPage : SettingsPageBase
     private AiProviderConfig? _dialogEditingProvider = null;
     private List<AiModelItem> _dialogModels = new();
 
-    // 浮动 Toast 定时器
-    private DispatcherTimer? _toastTimer;
+    // MaterialDesign 原生 Snackbar 消息队列
+    private readonly SnackbarMessageQueue _snackbarQueue = new(TimeSpan.FromSeconds(2.5));
 
     public AutomationSettingsPage()
     {
         InitializeComponent();
+
+        if (PageSnackbar != null)
+        {
+            PageSnackbar.MessageQueue = _snackbarQueue;
+        }
 
         var configDir = Plugin.Instance?.PluginConfigFolder ?? AppContext.BaseDirectory;
         Directory.CreateDirectory(configDir);
@@ -60,22 +66,28 @@ public partial class AutomationSettingsPage : SettingsPageBase
     {
         Dispatcher.Invoke(() =>
         {
-            if (ToastBorder == null || ToastMessageTextBlock == null) return;
-            ToastMessageTextBlock.Text = message;
-            ToastBorder.Visibility = Visibility.Visible;
-
-            _toastTimer?.Stop();
-            _toastTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(2.5)
-            };
-            _toastTimer.Tick += (_, _) =>
-            {
-                _toastTimer.Stop();
-                if (ToastBorder != null) ToastBorder.Visibility = Visibility.Collapsed;
-            };
-            _toastTimer.Start();
+            _snackbarQueue.Enqueue(message);
         });
+    }
+
+    private void UpdateDependentControlStates(bool syncMultiSessionExpander = false)
+    {
+        if (CommandWarningBanner != null)
+        {
+            CommandWarningBanner.Visibility = _settings.IsCommandExecutionEnabled
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        if (MultiSessionSubOptionsPanel != null)
+        {
+            MultiSessionSubOptionsPanel.IsEnabled = _settings.IsMultiSessionEnabled;
+        }
+
+        if (syncMultiSessionExpander && MultiSessionExpander != null)
+        {
+            MultiSessionExpander.IsExpanded = _settings.IsMultiSessionEnabled;
+        }
     }
 
     private void OnExternalSettingsChanged(PluginSettings updated)
@@ -117,6 +129,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
                 _settings.MaxToolIterations = updated.MaxToolIterations;
                 if (MaxToolIterationsTextBox != null) MaxToolIterationsTextBox.Text = updated.EffectiveMaxToolIterations.ToString();
+
+                UpdateDependentControlStates(syncMultiSessionExpander: true);
 
                 // 供应商列表可能被 AI 在聊天窗口里增删改过，必须重建卡片，
                 // 否则页面停留在过时快照上，用户在旧卡片上编辑/删除极易造成脏写冲突。
@@ -195,7 +209,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
             if (StatusTextBlock != null)
             {
                 StatusTextBlock.Text = ok
-                    ? "设置已自动保存！"
+                    ? "设置已自动保存"
                     : $"保存失败：{SettingsManager.LastSaveError ?? "未知原因"}";
             }
         }
@@ -209,6 +223,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
     {
         if (_isUpdatingUi) return;
         SyncFromInputs();
+        UpdateDependentControlStates();
         SaveSettingsToFile();
     }
 
@@ -263,72 +278,97 @@ public partial class AutomationSettingsPage : SettingsPageBase
             SaveButton.Click += (_, _) =>
             {
                 SyncFromInputs();
+                UpdateDependentControlStates();
                 bool ok = SettingsManager.Save(_settings);
+                if (StatusTextBlock != null)
+                {
+                    StatusTextBlock.Text = ok
+                        ? "设置已保存"
+                        : $"保存失败：{SettingsManager.LastSaveError ?? "未知原因"}";
+                }
                 ShowToast(
                     ok ? "所有设置已保存成功！" : $"保存失败：{SettingsManager.LastSaveError ?? "未知原因"}",
                     isError: !ok);
             };
         }
 
-        if (IsMemoryEnabledCheckBox != null)
+        _isUpdatingUi = true;
+        try
         {
-            IsMemoryEnabledCheckBox.IsChecked = _settings.IsMemoryEnabled;
-            IsMemoryEnabledCheckBox.Click += (_, _) => AutoSave();
+            if (IsMemoryEnabledCheckBox != null)
+            {
+                IsMemoryEnabledCheckBox.IsChecked = _settings.IsMemoryEnabled;
+            }
+
+            if (IsCommandExecutionEnabledCheckBox != null)
+            {
+                IsCommandExecutionEnabledCheckBox.IsChecked = _settings.IsCommandExecutionEnabled;
+            }
+
+            if (IsMultiSessionEnabledCheckBox != null)
+            {
+                IsMultiSessionEnabledCheckBox.IsChecked = _settings.IsMultiSessionEnabled;
+            }
+
+            if (SessionSidebarExpandedCheckBox != null)
+            {
+                SessionSidebarExpandedCheckBox.IsChecked = _settings.IsSessionSidebarExpandedByDefault;
+            }
+
+            if (NewSessionOnOpenCheckBox != null)
+            {
+                NewSessionOnOpenCheckBox.IsChecked = _settings.IsNewSessionOnOpenEnabled;
+            }
+
+            if (AiSessionTitleCheckBox != null)
+            {
+                AiSessionTitleCheckBox.IsChecked = _settings.IsAiSessionTitleEnabled;
+            }
+
+            if (BackgroundTaskNotificationCheckBox != null)
+            {
+                BackgroundTaskNotificationCheckBox.IsChecked = _settings.IsBackgroundTaskNotificationEnabled;
+            }
+
+            if (MaxToolIterationsTextBox != null)
+            {
+                MaxToolIterationsTextBox.Text = _settings.EffectiveMaxToolIterations.ToString();
+            }
+
+            if (CustomPromptTextBox != null)
+            {
+                CustomPromptTextBox.Text = _settings.CustomPrompt;
+            }
+
+            if (CustomMemoryTextBox != null)
+            {
+                CustomMemoryTextBox.Text = _settings.CustomMemory;
+            }
+
+            UpdateDependentControlStates(syncMultiSessionExpander: true);
+        }
+        finally
+        {
+            _isUpdatingUi = false;
         }
 
-        if (IsCommandExecutionEnabledCheckBox != null)
-        {
-            IsCommandExecutionEnabledCheckBox.IsChecked = _settings.IsCommandExecutionEnabled;
-            IsCommandExecutionEnabledCheckBox.Click += (_, _) => AutoSave();
-        }
-
+        if (IsMemoryEnabledCheckBox != null) IsMemoryEnabledCheckBox.Click += (_, _) => AutoSave();
+        if (IsCommandExecutionEnabledCheckBox != null) IsCommandExecutionEnabledCheckBox.Click += (_, _) => AutoSave();
         if (IsMultiSessionEnabledCheckBox != null)
         {
-            IsMultiSessionEnabledCheckBox.IsChecked = _settings.IsMultiSessionEnabled;
-            IsMultiSessionEnabledCheckBox.Click += (_, _) => AutoSave();
+            IsMultiSessionEnabledCheckBox.Click += (_, _) =>
+            {
+                AutoSave();
+                UpdateDependentControlStates(syncMultiSessionExpander: true);
+            };
         }
-
-        if (SessionSidebarExpandedCheckBox != null)
-        {
-            SessionSidebarExpandedCheckBox.IsChecked = _settings.IsSessionSidebarExpandedByDefault;
-            SessionSidebarExpandedCheckBox.Click += (_, _) => AutoSave();
-        }
-
-        if (NewSessionOnOpenCheckBox != null)
-        {
-            NewSessionOnOpenCheckBox.IsChecked = _settings.IsNewSessionOnOpenEnabled;
-            NewSessionOnOpenCheckBox.Click += (_, _) => AutoSave();
-        }
-
-        if (AiSessionTitleCheckBox != null)
-        {
-            AiSessionTitleCheckBox.IsChecked = _settings.IsAiSessionTitleEnabled;
-            AiSessionTitleCheckBox.Click += (_, _) => AutoSave();
-        }
-
-        if (BackgroundTaskNotificationCheckBox != null)
-        {
-            BackgroundTaskNotificationCheckBox.IsChecked = _settings.IsBackgroundTaskNotificationEnabled;
-            BackgroundTaskNotificationCheckBox.Click += (_, _) => AutoSave();
-        }
-
-        if (MaxToolIterationsTextBox != null)
-        {
-            MaxToolIterationsTextBox.Text = _settings.EffectiveMaxToolIterations.ToString();
-            MaxToolIterationsTextBox.LostFocus += (_, _) => AutoSave();
-        }
-
-        if (CustomPromptTextBox != null)
-        {
-            CustomPromptTextBox.Text = _settings.CustomPrompt;
-            CustomPromptTextBox.LostFocus += (_, _) => AutoSave();
-        }
-
-        if (CustomMemoryTextBox != null)
-        {
-            CustomMemoryTextBox.Text = _settings.CustomMemory;
-            CustomMemoryTextBox.LostFocus += (_, _) => AutoSave();
-        }
+        if (SessionSidebarExpandedCheckBox != null) SessionSidebarExpandedCheckBox.Click += (_, _) => AutoSave();
+        if (NewSessionOnOpenCheckBox != null) NewSessionOnOpenCheckBox.Click += (_, _) => AutoSave();
+        if (AiSessionTitleCheckBox != null) AiSessionTitleCheckBox.Click += (_, _) => AutoSave();
+        if (BackgroundTaskNotificationCheckBox != null) BackgroundTaskNotificationCheckBox.Click += (_, _) => AutoSave();
+        if (MaxToolIterationsTextBox != null) MaxToolIterationsTextBox.LostFocus += (_, _) => AutoSave();
+        if (CustomPromptTextBox != null) CustomPromptTextBox.LostFocus += (_, _) => AutoSave();
+        if (CustomMemoryTextBox != null) CustomMemoryTextBox.LostFocus += (_, _) => AutoSave();
 
         if (ClearMemoryButton != null)
         {
@@ -381,17 +421,12 @@ public partial class AutomationSettingsPage : SettingsPageBase
         if (DialogNameTextBox != null) DialogNameTextBox.Text = name;
         if (DialogBaseUrlTextBox != null) DialogBaseUrlTextBox.Text = baseUrl;
 
-        ShowToast($"已填入「{name}」预置地址，请填写密钥后点击自动获取模型。");
+        ShowToast($"已填入「{name}」预置地址，请填写密钥后点击从接口获取。");
     }
 
     /// <summary>
     /// 给运行时创建的控件挂上 DynamicResource 引用，而不是塞一个当时取到的画刷实例。
-    ///
-    /// 关键点：如果直接写 `control.Foreground = TryFindResource(...) as Brush`，那是把
-    /// 「当前这一刻的 Brush 实例」存成了本地值。之后用户在设置里切换深浅色时，
-    /// MaterialDesign 会换掉资源字典，但这些控件仍握着旧实例，于是保持旧主题的配色 ——
-    /// 表现为「刚打开正常，切一次主题就看不见」。
-    /// 用 SetResourceReference 注册成动态引用才能跟着主题走。
+    /// 用 SetResourceReference 注册成动态引用才能在用户切换深浅色主题时自动更新。
     /// </summary>
     private void BindThemeBrush(FrameworkElement target, DependencyProperty property, string key)
     {
@@ -403,9 +438,23 @@ public partial class AutomationSettingsPage : SettingsPageBase
         }
         else
         {
-            // 资源不存在时才退回固定值，避免完全没有前景色
             target.SetValue(property, Brushes.Gray);
         }
+    }
+
+    private void ApplyDynamicStyle(FrameworkElement target, string styleKey)
+    {
+        if (TryFindResource(styleKey) != null)
+        {
+            target.SetResourceReference(FrameworkElement.StyleProperty, styleKey);
+        }
+    }
+
+    private static string BuildProviderDescription(AiProviderConfig provider)
+    {
+        var url = string.IsNullOrWhiteSpace(provider.BaseUrl) ? "(未设置 API 地址)" : provider.BaseUrl;
+        int enabledCount = provider.Models.Count(m => m.IsEnabled);
+        return $"{url} · 已启用 {enabledCount}/{provider.Models.Count} 个模型";
     }
 
     private void RenderProvidersList()
@@ -415,84 +464,78 @@ public partial class AutomationSettingsPage : SettingsPageBase
 
         if (_settings.Providers.Count == 0)
         {
-            var emptyBorder = new Border
+            var emptyCard = new Card
             {
-                BorderThickness = new Thickness(1, 1, 1, 1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(24, 24, 24, 24),
-                Margin = new Thickness(0, 0, 0, 10)
+                Padding = new Thickness(24),
+                Margin = new Thickness(0, 0, 0, 6)
             };
-            BindThemeBrush(emptyBorder, Border.BackgroundProperty, "MaterialDesignCardBackground");
-            BindThemeBrush(emptyBorder, Border.BorderBrushProperty, "MaterialDesignDivider");
+            BindThemeBrush(emptyCard, Control.ForegroundProperty, "MaterialDesignBody");
+
+            var emptyStack = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            var emptyIcon = new PackIcon
+            {
+                Kind = PackIconKind.CloudOutline,
+                Width = 36,
+                Height = 36,
+                Opacity = 0.45,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
             var emptyText = new TextBlock
             {
-                Text = "暂无供应商",
+                Text = "暂无模型供应商，点击右上角「添加供应商」开始配置。",
+                Opacity = 0.7,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
             BindThemeBrush(emptyText, TextBlock.ForegroundProperty, "MaterialDesignBody");
-            emptyBorder.Child = emptyText;
-            ProvidersListContainer.Children.Add(emptyBorder);
+            emptyStack.Children.Add(emptyIcon);
+            emptyStack.Children.Add(emptyText);
+            emptyCard.Content = emptyStack;
+            ProvidersListContainer.Children.Add(emptyCard);
             return;
         }
 
         foreach (var provider in _settings.Providers)
         {
-            var card = new Border
+            var card = new Card
             {
-                BorderThickness = new Thickness(1, 1, 1, 1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(16, 16, 16, 16),
-                Margin = new Thickness(0, 0, 0, 10)
+                Margin = new Thickness(0, 0, 0, 6)
             };
-            BindThemeBrush(card, Border.BackgroundProperty, "MaterialDesignCardBackground");
-            BindThemeBrush(card, Border.BorderBrushProperty, "MaterialDesignDivider");
+            BindThemeBrush(card, Control.ForegroundProperty, "MaterialDesignBody");
 
-            var mainStack = new StackPanel();
-
-            // 顶行：别名与操作按钮
-            var topGrid = new Grid();
-            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var titleStack = new StackPanel();
-            var nameText = new TextBlock
+            var expander = new Expander
             {
-                Text = string.IsNullOrWhiteSpace(provider.Name) ? "(未命名供应商)" : provider.Name,
-                FontSize = 15,
-                FontWeight = FontWeights.Bold
+                Background = Brushes.Transparent,
+                IsExpanded = true
             };
-            var urlText = new TextBlock
-            {
-                Text = string.IsNullOrWhiteSpace(provider.BaseUrl) ? "(未设置 API 地址)" : provider.BaseUrl,
-                FontSize = 11,
-                Opacity = 0.7,
-                Margin = new Thickness(0, 2, 0, 0)
-            };
-            BindThemeBrush(urlText, TextBlock.ForegroundProperty, "MaterialDesignBody");
-            titleStack.Children.Add(nameText);
-            titleStack.Children.Add(urlText);
-            Grid.SetColumn(titleStack, 0);
+            BindThemeBrush(expander, Control.ForegroundProperty, "MaterialDesignBody");
 
             var actionsStack = new StackPanel
             {
-                Orientation = Orientation.Horizontal
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(actionsStack, 1);
 
             var editBtn = new Button
             {
-                Content = "编辑",
-                Padding = new Thickness(10, 4, 10, 4),
-                Margin = new Thickness(0, 0, 8, 0)
+                Content = new IconText { Kind = PackIconKind.EditOutline, Text = "编辑" },
+                Margin = new Thickness(0, 0, 4, 0),
+                ToolTip = "编辑供应商"
             };
+            ApplyDynamicStyle(editBtn, "MaterialDesignFlatButton");
             editBtn.Click += (_, _) => OpenEditProviderDialog(provider);
             actionsStack.Children.Add(editBtn);
 
             var delBtn = new Button
             {
-                Content = "删除",
-                Padding = new Thickness(10, 4, 10, 4)
+                Content = new IconText { Kind = PackIconKind.Delete, Text = "删除" },
+                Foreground = Brushes.IndianRed,
+                ToolTip = "删除供应商"
             };
+            ApplyDynamicStyle(delBtn, "MaterialDesignFlatButton");
             delBtn.Click += (_, _) =>
             {
                 if (_settings.Providers.Count <= 1)
@@ -511,38 +554,29 @@ public partial class AutomationSettingsPage : SettingsPageBase
             };
             actionsStack.Children.Add(delBtn);
 
-            topGrid.Children.Add(titleStack);
-            topGrid.Children.Add(actionsStack);
-            mainStack.Children.Add(topGrid);
-
-            // 分割线
-            var divider = new Border
+            var headerControl = new SettingsControl
             {
-                Height = 1,
-                Margin = new Thickness(0, 8, 0, 8)
+                IconGlyph = PackIconKind.CloudOutline,
+                Header = string.IsNullOrWhiteSpace(provider.Name) ? "(未命名供应商)" : provider.Name,
+                Description = BuildProviderDescription(provider),
+                Switcher = actionsStack,
+                Margin = new Thickness(-12, 0, -12, 0)
             };
-            BindThemeBrush(divider, Border.BackgroundProperty, "MaterialDesignDivider");
-            mainStack.Children.Add(divider);
+            BindThemeBrush(headerControl, Control.ForegroundProperty, "MaterialDesignBody");
+            expander.Header = headerControl;
 
-            // 模型勾选区域
-            var modelsStack = new StackPanel();
-            var modelsLabel = new TextBlock
+            var modelsStack = new StackPanel
             {
-                Text = "模型列表",
-                FontSize = 11,
-                Opacity = 0.7,
-                Margin = new Thickness(0, 0, 0, 6)
+                Margin = new Thickness(36, 0, 24, 12)
             };
-            BindThemeBrush(modelsLabel, TextBlock.ForegroundProperty, "MaterialDesignBody");
-            modelsStack.Children.Add(modelsLabel);
 
             if (provider.Models.Count == 0)
             {
                 var noModelsText = new TextBlock
                 {
-                    Text = "(暂无模型)",
-                    FontSize = 11,
-                    Opacity = 0.7,
+                    Text = "暂无模型，点击「编辑」从接口获取或手动添加",
+                    FontSize = 12,
+                    Opacity = 0.65,
                     FontStyle = FontStyles.Italic
                 };
                 BindThemeBrush(noModelsText, TextBlock.ForegroundProperty, "MaterialDesignBody");
@@ -550,8 +584,6 @@ public partial class AutomationSettingsPage : SettingsPageBase
             }
             else
             {
-                // 固定单元格宽度让勾选项按列对齐，宽窗口下自动铺开，
-                // 避免卡片右侧出现大片留白。
                 var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
                 foreach (var model in provider.Models)
                 {
@@ -559,12 +591,13 @@ public partial class AutomationSettingsPage : SettingsPageBase
                     {
                         Content = model.Name,
                         IsChecked = model.IsEnabled,
-                        Width = 210,
-                        Margin = new Thickness(0, 2, 8, 2)
+                        MinWidth = 190,
+                        Margin = new Thickness(0, 3, 12, 3)
                     };
                     cb.Click += (_, _) =>
                     {
                         model.IsEnabled = cb.IsChecked == true;
+                        headerControl.Description = BuildProviderDescription(provider);
                         SaveSettingsToFile();
                         ShowToast($"已{(model.IsEnabled ? "启用" : "禁用")}模型「{model.Name}」");
                     };
@@ -573,8 +606,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 modelsStack.Children.Add(wrap);
             }
 
-            mainStack.Children.Add(modelsStack);
-            card.Child = mainStack;
+            expander.Content = modelsStack;
+            card.Content = expander;
             ProvidersListContainer.Children.Add(card);
         }
     }
@@ -629,8 +662,8 @@ public partial class AutomationSettingsPage : SettingsPageBase
             var hint = new TextBlock
             {
                 Text = "还没有模型，点「从接口获取」或手动输入",
-                Opacity = 0.45,
-                FontSize = 11.5,
+                Opacity = 0.5,
+                FontSize = 12,
                 Margin = new Thickness(4, 8, 4, 8)
             };
             BindThemeBrush(hint, TextBlock.ForegroundProperty, "MaterialDesignBody");
@@ -643,7 +676,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
             var rowGrid = new Grid
             {
                 Margin = new Thickness(0, 1, 0, 1),
-                MinHeight = 26
+                MinHeight = 28
             };
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -652,7 +685,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
             {
                 Content = model.Name,
                 IsChecked = model.IsEnabled,
-                FontSize = 12.5,
+                FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center
             };
             checkBox.Click += (_, _) =>
@@ -660,33 +693,17 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 model.IsEnabled = checkBox.IsChecked == true;
             };
 
-            // 删除改成图标按钮，和会话列表里的删除保持同一套视觉
-            var closeIcon = new Shapes.Path
-            {
-                Data = Geometry.Parse("M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"),
-                Width = 8,
-                Height = 8,
-                Stretch = Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            BindThemeBrush(closeIcon, Shapes.Shape.FillProperty, "MaterialDesignBody");
-
             var delBtn = new Button
             {
-                Content = closeIcon,
-                Width = 22,
-                Height = 22,
-                Padding = new Thickness(0),
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = Cursors.Hand,
-                Opacity = 0.5,
+                Content = new PackIcon { Kind = PackIconKind.Close, Width = 14, Height = 14 },
+                Padding = new Thickness(4),
+                Height = 24,
+                Width = 24,
+                Opacity = 0.65,
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = "移除这个模型"
             };
-            delBtn.MouseEnter += (_, _) => delBtn.Opacity = 0.9;
-            delBtn.MouseLeave += (_, _) => delBtn.Opacity = 0.5;
+            ApplyDynamicStyle(delBtn, "MaterialDesignToolForegroundButton");
             delBtn.Click += (_, _) =>
             {
                 _dialogModels.Remove(model);
@@ -998,6 +1015,7 @@ public partial class AutomationSettingsPage : SettingsPageBase
     private void DisplayTotpSetupCard(string secret)
     {
         if (TotpSetupCard == null) return;
+        if (TotpExpander != null) TotpExpander.IsExpanded = true;
         TotpSetupCard.Visibility = Visibility.Visible;
 
         if (TotpSecretStringTextBox != null)
