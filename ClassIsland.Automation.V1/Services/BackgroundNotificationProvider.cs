@@ -31,20 +31,27 @@ public class BackgroundNotificationProvider : NotificationProviderBase, IDisposa
     {
         try
         {
+            var singleLineTitle = AiClientService.SanitizeSingleLineNotification(title, maxLength: 24);
+            if (string.IsNullOrWhiteSpace(singleLineTitle))
+            {
+                singleLineTitle = "IslandAgent 后台任务";
+            }
+            var singleLineMessage = AiClientService.SanitizeSingleLineNotification(message, maxLength: 24);
+
             ShowNotification(new NotificationRequest
             {
                 MaskContent = NotificationContent.CreateTwoIconsMask(
-                    title,
+                    singleLineTitle,
                     leftIcon: PackIconKind.RobotOutline,
                     hasRightIcon: false,
                     factory: x =>
                     {
                         x.Duration = TimeSpan.FromSeconds(2);
                     }),
-                OverlayContent = string.IsNullOrWhiteSpace(message)
+                OverlayContent = string.IsNullOrWhiteSpace(singleLineMessage)
                     ? null
                     : NotificationContent.CreateSimpleTextContent(
-                        message,
+                        singleLineMessage,
                         factory: x =>
                         {
                             x.Duration = TimeSpan.FromSeconds(5);

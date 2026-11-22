@@ -227,11 +227,11 @@ public sealed class ChatSessionManager
             TurnEnded?.Invoke();
             RaiseChanged();
 
-            // 回合结束时窗口已关闭（任务转入后台）且用户开启了后台通知，提醒任务结果
+            // 回合结束时窗口已关闭（任务转入后台）且用户开启了后台通知，
+            // 单独让 AI 生成一句状态栏单行可完整显示的简短摘要再发提醒
             if (!IsWindowVisible && SettingsManager.Current.IsBackgroundTaskNotificationEnabled)
             {
-                var title = success ? "IslandAgent 后台任务已完成" : "IslandAgent 后台任务失败";
-                BackgroundNotificationRequested?.Invoke(title, TruncateText(replyText, 120));
+                _ = SendBackgroundNotificationAsync(textContent, replyText, success);
             }
         }
     }
@@ -413,6 +413,46 @@ public sealed class ChatSessionManager
         catch
         {
             // 标题生成失败不影响对话
+        }
+    }
+
+    /// <summary>
+    /// 后台任务结束后单独调用模型生成一句适合状态栏单行完整显示的简短摘要并触发宿主提醒。
+    /// 等待期间若用户已重新打开窗口则放弃弹出；模型调用失败或超时则降级为本地单行清洗。
+    /// </summary>
+    private async Task SendBackgroundNotificationAsync(string userText, string replyText, bool success)
+    {
+        try
+        {
+            var title = success ? "IslandAgent 后台任务已完成" : "IslandAgent 后台任务失败";
+            string? summary = null;
+
+            if (success)
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                summary = await _aiClient.GenerateNotificationSummaryAsync(
+                    SettingsManager.Current,
+                    userText,
+                    replyText,
+                    cts.Token);
+            }
+
+            if (IsWindowVisible) return;
+
+            var body = !string.IsNullOrWhiteSpace(summary)
+                ? summary
+                : AiClientService.SanitizeSingleLineNotification(replyText, maxLength: 24);
+
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                body = success ? "后台任务已处理完毕" : "后台任务执行失败，请打开窗口查看";
+            }
+
+            BackgroundNotificationRequested?.Invoke(title, body);
+        }
+        catch
+        {
+            // 后台通知生成失败不影响已落盘的对话结果
         }
     }
 
