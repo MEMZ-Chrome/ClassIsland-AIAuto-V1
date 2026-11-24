@@ -502,6 +502,32 @@
                             </materialDesign:Card>
                         </StackPanel>
                     </TabItem>
+
+                    <!-- 选项卡 4：关于 -->
+                    <TabItem Header="关于">
+                        <StackPanel Margin="0,12,0,0">
+                            <materialDesign:Card Padding="12,10,16,10" Margin="0,0,0,6"
+                                                 Foreground="{DynamicResource MaterialDesignBody}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ci:SettingsControl IconGlyph="LinkVariant"
+                                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                                        Header="MEMZ-Chrome"
+                                                        Description="Bilibili 主页"
+                                                        HasSwitcher="False"/>
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="13.5">
+                                        <Hyperlink Name="AuthorHomepageHyperlink"
+                                                   NavigateUri="https://space.bilibili.com/1353783215"
+                                                   ToolTip="https://space.bilibili.com/1353783215"
+                                                   Foreground="{DynamicResource PrimaryHueMidBrush}">去关注</Hyperlink>
+                                    </TextBlock>
+                                </Grid>
+                            </materialDesign:Card>
+                        </StackPanel>
+                    </TabItem>
                 </TabControl>
 
                 <!-- 底部状态与立即保存栏 -->

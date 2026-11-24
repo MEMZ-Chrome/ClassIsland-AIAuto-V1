@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -5,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 using ClassIsland.Automation.Core.Models;
 using ClassIsland.Automation.Core.Services;
 using ClassIsland.Core.Abstractions.Controls;
@@ -424,6 +426,24 @@ public partial class AutomationSettingsPage : SettingsPageBase
                 AutoSave();
                 ShowToast("长期记忆库已清空并保存！");
             };
+        }
+
+        if (AuthorHomepageHyperlink != null)
+        {
+            AuthorHomepageHyperlink.RequestNavigate += OnAuthorHomepageRequestNavigate;
+        }
+    }
+
+    private void OnAuthorHomepageRequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"无法打开链接：{ex.Message}", isError: true);
         }
     }
 
